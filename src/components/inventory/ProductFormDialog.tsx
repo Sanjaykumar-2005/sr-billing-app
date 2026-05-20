@@ -1,0 +1,195 @@
+import * as React from 'react'
+
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { GODOWNS_SEED, SECTIONS } from '@/lib/constants'
+import type { Product, Section } from '@/types'
+
+export interface ProductFormValues {
+  name: string
+  spec: string
+  sku: string
+  unit: string
+  salePrice: number
+  section: Section
+  godownId: string
+  lowStockThreshold: number
+}
+
+interface ProductFormDialogProps {
+  open: boolean
+  mode: 'add' | 'edit'
+  product?: Product | null
+  allowedSections: Section[]
+  onOpenChange: (open: boolean) => void
+  onSubmit: (values: ProductFormValues) => void
+}
+
+const UNITS = ['pcs', 'box', 'sheet', 'length', 'tin', 'bag', 'roll', 'set', 'pair', 'kg']
+
+function sectionLabel(section: Section) {
+  return SECTIONS.find((item) => item.key === section)?.label ?? section
+}
+
+function getInitialValues(product: Product | null | undefined, allowedSections: Section[]): ProductFormValues {
+  return {
+    name: product?.name ?? '',
+    spec: product?.spec ?? '',
+    sku: product?.sku ?? '',
+    unit: product?.unit ?? 'pcs',
+    salePrice: product?.salePrice ?? 0,
+    section: product?.section ?? allowedSections[0] ?? 'glass',
+    godownId: product?.godownId ?? GODOWNS_SEED[0]?.id ?? '',
+    lowStockThreshold: product?.lowStockThreshold ?? 5,
+  }
+}
+
+export function ProductFormDialog({
+  open,
+  mode,
+  product,
+  allowedSections,
+  onOpenChange,
+  onSubmit,
+}: ProductFormDialogProps) {
+  const [values, setValues] = React.useState<ProductFormValues>(() => getInitialValues(product, allowedSections))
+
+  function update<K extends keyof ProductFormValues>(key: K, value: ProductFormValues[K]) {
+    setValues((current) => ({ ...current, [key]: value }))
+  }
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    onSubmit({
+      ...values,
+      name: values.name.trim(),
+      spec: values.spec.trim(),
+      sku: values.sku.trim(),
+      unit: values.unit.trim(),
+      salePrice: Number(values.salePrice) || 0,
+      lowStockThreshold: Number(values.lowStockThreshold) || 0,
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[92vh] max-w-xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{mode === 'add' ? 'Add product' : 'Edit product'}</DialogTitle>
+          <DialogDescription>
+            Product details only. Stock is updated through printed purchases.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="productName">Name</Label>
+              <Input id="productName" value={values.name} onChange={(event) => update('name', event.target.value)} required />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productSpec">Spec</Label>
+              <Input id="productSpec" value={values.spec} onChange={(event) => update('spec', event.target.value)} />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productSku">SKU</Label>
+              <Input id="productSku" value={values.sku} onChange={(event) => update('sku', event.target.value)} required />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Unit</Label>
+              <Select value={values.unit} onValueChange={(value) => update('unit', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {UNITS.map((unit) => (
+                    <SelectItem key={unit} value={unit}>
+                      {unit}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productPrice">Price</Label>
+              <Input
+                id="productPrice"
+                type="number"
+                min={0}
+                step="0.01"
+                value={values.salePrice}
+                onChange={(event) => update('salePrice', Number(event.target.value))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="productMinStock">Min stock</Label>
+              <Input
+                id="productMinStock"
+                type="number"
+                min={0}
+                value={values.lowStockThreshold}
+                onChange={(event) => update('lowStockThreshold', Number(event.target.value))}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={values.section} onValueChange={(value) => update('section', value as Section)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SECTIONS.filter((section) => allowedSections.includes(section.key)).map((section) => (
+                    <SelectItem key={section.key} value={section.key}>
+                      {sectionLabel(section.key)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Godown</Label>
+              <Select value={values.godownId} onValueChange={(value) => update('godownId', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GODOWNS_SEED.map((godown) => (
+                    <SelectItem key={godown.id} value={godown.id}>
+                      {godown.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit">
+              {mode === 'add' ? 'Create product' : 'Save changes'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  )
+}
