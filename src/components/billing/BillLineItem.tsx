@@ -14,9 +14,10 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { SECTIONS } from '@/lib/constants'
+import { getUserSections } from '@/lib/userSections'
 import { useAuthStore } from '@/store/authStore'
 import { useInventoryStore } from '@/store/inventoryStore'
-import { SECTION_ACCESS, type Product, type Section } from '@/types'
+import type { Product, Section } from '@/types'
 import { cn } from '@/lib/utils'
 
 const INR = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
@@ -25,16 +26,57 @@ interface BillLineItemProps {
   index: number
   onRemove: () => void
   isOnly: boolean
-  lockedSection?: Section
 }
 
-export function BillLineItem({ index, onRemove, isOnly, lockedSection }: BillLineItemProps) {
+function getSizePlaceholder(section?: Section) {
+  switch (section) {
+    case 'glass':
+    case 'plywood':
+      return 'e.g. 6×4 ft'
+    case 'painting':
+      return 'e.g. 4 ltr / 500 ml'
+    case 'plumbing':
+      return 'e.g. ½ inch / 3 m'
+    case 'electrical':
+      return 'e.g. 10 m / 6 mm²'
+    default:
+      return 'e.g. size or dimension'
+  }
+}
+
+function isSqFtUnit(unit?: string) {
+  return unit?.trim().toLowerCase() === 'sq.ft'
+}
+
+function formatUnitLabel(unit?: string) {
+  const normalized = unit?.trim().toLowerCase()
+
+  switch (normalized) {
+    case 'pcs':
+    case 'pc':
+    case 'piece':
+    case 'pieces':
+      return 'Piece'
+    case 'ltr':
+    case 'liter':
+    case 'litre':
+      return 'Liter'
+    case 'kg':
+      return 'Kg'
+    case 'sq.ft':
+      return 'Sq.Ft'
+    default:
+      return unit ? unit.charAt(0).toUpperCase() + unit.slice(1) : ''
+  }
+}
+
+export function BillLineItem({ index, onRemove, isOnly }: BillLineItemProps) {
   const [open, setOpen] = useState(false)
   const { register, setValue, control, formState: { errors } } = useFormContext()
   const currentUser = useAuthStore((s) => s.currentUser)!
   const products = useInventoryStore((s) => s.products)
 
-  const allowedSections = SECTION_ACCESS[currentUser.role]
+  const allowedSections = getUserSections(currentUser.id)
   const selectedProductId = useWatch({ control, name: `items.${index}.productId` })
   const scannedProductName = useWatch({ control, name: `items.${index}.productName` })
   const quantity  = Number(useWatch({ control, name: `items.${index}.quantity`  })) || 0
@@ -42,51 +84,53 @@ export function BillLineItem({ index, onRemove, isOnly, lockedSection }: BillLin
   const sqFt      = Number(useWatch({ control, name: `items.${index}.sqFt`      })) || 0
 
   const selectedProduct = products.find((p) => p.id === selectedProductId)
-  const subtotal = sqFt > 0 ? sqFt * unitPrice : quantity * unitPrice
+  const usesSqFt = isSqFtUnit(selectedProduct?.unit)
+  const subtotal = usesSqFt ? sqFt * unitPrice : quantity * unitPrice
+  const qtyLabel = selectedProduct ? `Qty (${formatUnitLabel(selectedProduct.unit)})` : 'Qty'
+  const sizePlaceholder = getSizePlaceholder(selectedProduct?.section)
 
-  const sectionsToShow = lockedSection && !selectedProductId ? [lockedSection] : allowedSections
-  const displayedProducts = products.filter((p) => sectionsToShow.includes(p.section))
+  const displayedProducts = products.filter((p) => allowedSections.includes(p.section))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const itemErrors = (errors.items as any)?.[index]
 
-  function handleSelect(product: Product) {
+  function handleSelectProduct(product: Product) {
     setValue(`items.${index}.productId`,   product.id,         { shouldValidate: true })
     setValue(`items.${index}.productName`, product.name)
     setValue(`items.${index}.unit`,        product.unit)
     setValue(`items.${index}.unitPrice`,   product.salePrice)
     setValue(`items.${index}.quantity`,    1)
+    setValue(`items.${index}.sqFt`,        0,                  { shouldValidate: true })
     setOpen(false)
   }
 
   return (
     <div className="border-b border-border last:border-0 py-3 space-y-2">
-      {/* Row 1: Name | Glass Size | Model */}
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
+      {/* Row 1: Name | Size / Dimension | Model */}
+      <div className="grid grid-cols-[minmax(280px,1fr)_7rem_6rem] items-start gap-2">
+        <div className="w-full min-w-[280px]">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
                 role="combobox"
                 className={cn(
-                  'w-full flex items-center rounded-md border border-input bg-background px-3 py-2 text-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  !selectedProductId && 'text-muted-foreground',
-                  !selectedProductId && scannedProductName && 'text-foreground',
+                  'w-full min-h-[44px] min-w-[280px] flex items-center rounded-md border border-input bg-background px-3 py-2 text-base text-left ring-offset-background transition-colors hover:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  selectedProduct?.name || scannedProductName ? 'text-foreground' : 'text-muted-foreground',
                   itemErrors?.productId && 'border-destructive'
                 )}
               >
                 <span className="flex-1 truncate">
-                  {selectedProduct?.name ?? scannedProductName ?? 'Glass / Plywood name…'}
+                  {selectedProduct?.name ?? scannedProductName ?? 'Search for product'}
                 </span>
               </button>
             </PopoverTrigger>
             <PopoverContent className="p-0 w-80" align="start">
               <Command>
-                <CommandInput placeholder="Search products…" />
+                <CommandInput placeholder="Search product…" />
                 <CommandList>
                   <CommandEmpty>No products found.</CommandEmpty>
-                  {sectionsToShow.map((section) => {
+                  {allowedSections.map((section) => {
                     const group = displayedProducts.filter((p) => p.section === section)
                     if (!group.length) return null
                     const label = SECTIONS.find((s) => s.key === section)?.label ?? section
@@ -96,7 +140,13 @@ export function BillLineItem({ index, onRemove, isOnly, lockedSection }: BillLin
                           <CommandItem
                             key={product.id}
                             value={`${product.section}-${product.id}-${product.name}`}
-                            onSelect={() => handleSelect(product)}
+                            className="flex cursor-pointer items-center bg-transparent px-3 py-2 text-foreground data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground"
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            onSelect={() => handleSelectProduct(product)}
+                            onClick={() => handleSelectProduct(product)}
                           >
                             <span className="flex-1">{product.name}</span>
                             <span className="font-mono text-xs text-muted-foreground">
@@ -117,7 +167,8 @@ export function BillLineItem({ index, onRemove, isOnly, lockedSection }: BillLin
         </div>
 
         <Input
-          placeholder="Glass size"
+          aria-label="Size / Dimension"
+          placeholder={sizePlaceholder}
           className="w-28"
           {...register(`items.${index}.glassSize`)}
         />
@@ -128,10 +179,10 @@ export function BillLineItem({ index, onRemove, isOnly, lockedSection }: BillLin
         />
       </div>
 
-      {/* Row 2: Qty | Sq.Ft | Rate | Amount | Delete */}
+      {/* Row 2: Qty | optional Sq.Ft | Rate | Amount | Delete */}
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground whitespace-nowrap">Qty</span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">{qtyLabel}</span>
           <Input
             type="number"
             className="w-16 text-right font-mono tabular-nums"
@@ -140,17 +191,21 @@ export function BillLineItem({ index, onRemove, isOnly, lockedSection }: BillLin
             {...register(`items.${index}.quantity`)}
           />
         </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-muted-foreground whitespace-nowrap">Sq.Ft</span>
-          <Input
-            type="number"
-            className="w-20 text-right font-mono tabular-nums"
-            step="0.01"
-            min={0}
-            placeholder="0"
-            {...register(`items.${index}.sqFt`)}
-          />
-        </div>
+        {usesSqFt && (
+          <div className="flex items-center gap-1.5">
+            {selectedProduct && (
+              <span className="text-xs text-muted-foreground whitespace-nowrap">Sq.Ft</span>
+            )}
+            <Input
+              type="number"
+              className="w-20 text-right font-mono tabular-nums"
+              step="0.01"
+              min={0}
+              placeholder="0"
+              {...register(`items.${index}.sqFt`)}
+            />
+          </div>
+        )}
         <div className="flex items-center gap-1.5">
           <span className="text-xs text-muted-foreground whitespace-nowrap">Rate</span>
           <Input

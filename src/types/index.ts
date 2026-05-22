@@ -8,13 +8,19 @@ export type Section =
   | 'painting'
   | 'electrical'
 
-export type Role = 'admin' | 'billing_a' | 'billing_b'
+export type SectionType = 'Glass' | 'Plywood' | 'Plumbing' | 'Painting' | 'Electrical'
+
+export type BillingRole = `billing_${string}`
+export type Role = 'admin' | BillingRole
 
 /** Maps each role to the sections it may access */
 export const SECTION_ACCESS: Record<Role, Section[]> = {
   admin:     ['glass', 'plywood', 'plumbing', 'painting', 'electrical'],
   billing_b: ['plumbing', 'painting', 'electrical'],
   billing_a: ['glass', 'plywood'],
+  billing_c: ['glass', 'plywood'],
+  billing_d: ['plumbing', 'painting', 'electrical'],
+  billing_e: ['glass', 'plywood'],
 }
 
 // ─── User ─────────────────────────────────────────────────────────────────────
@@ -50,6 +56,17 @@ export interface Product {
   salePrice: number // per unit (MRP / listed price)
   lowStockThreshold: number
   updatedAt: string // ISO-8601
+}
+
+export interface TransferLogEntry {
+  id: string
+  productId: string
+  productName: string
+  fromGodownId: string
+  toGodownId: string
+  qty: number
+  transferredAt: string // ISO-8601
+  transferredBy: string
 }
 
 // ─── Purchase ────────────────────────────────────────────────────────────────

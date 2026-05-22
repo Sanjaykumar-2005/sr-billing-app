@@ -1,11 +1,23 @@
 import { Download } from 'lucide-react'
 import { format } from 'date-fns'
 import { useState } from 'react'
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { SECTION_COLORS, SECTIONS } from '@/lib/constants'
 import { exportCsv } from '@/lib/exportCsv'
 import {
   selectBillsForMonth,
@@ -14,6 +26,8 @@ import {
   selectSectionBreakdown,
   selectStatusBreakdown,
 } from '@/lib/reportSelectors'
+import { getUserSections } from '@/lib/userSections'
+import { useAuthStore } from '@/store/authStore'
 import { useBillingStore } from '@/store/billingStore'
 
 const INR = new Intl.NumberFormat('en-IN', {
@@ -26,22 +40,100 @@ function monthFromValue(value: string) {
   return new Date(`${value}-01T00:00:00`)
 }
 
+function axisMoney(value: number) {
+  return `₹${Math.round(value / 1000)}k`
+}
+
+const STATUS_COLORS = {
+  paid: '#4CAF50',
+  partial: '#FFB74D',
+  pending: '#EF5350',
+} as const
+
+interface SectionChartRow {
+  section: string
+  sectionLabel: string
+  billCount: number
+  revenue: number
+  percentOfTotal: number
+  collectionRate: number
+}
+
+interface StatusChartRow {
+  status: 'paid' | 'partial' | 'pending'
+  billCount: number
+  amount: number
+}
+
+function SectionTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: SectionChartRow }>
+}) {
+  const row = payload?.[0]?.payload
+  if (!active || !row) return null
+
+  return (
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-popover-foreground shadow-md">
+      <p className="text-xs font-medium">{row.sectionLabel}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{row.billCount} bill{row.billCount === 1 ? '' : 's'}</p>
+      <p className="font-mono text-sm tabular-nums">{INR.format(row.revenue)}</p>
+    </div>
+  )
+}
+
+function StatusTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ payload?: StatusChartRow }>
+}) {
+  const row = payload?.[0]?.payload
+  if (!active || !row) return null
+
+  return (
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-popover-foreground shadow-md">
+      <p className="text-xs font-medium capitalize">{row.status}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{row.billCount} bill{row.billCount === 1 ? '' : 's'}</p>
+      <p className="font-mono text-sm tabular-nums">{INR.format(row.amount)}</p>
+    </div>
+  )
+}
+
 export function MonthlyReportPage() {
   const bills = useBillingStore((state) => state.bills)
+  const currentUser = useAuthStore((state) => state.currentUser)
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
   const monthDate = monthFromValue(selectedMonth)
-  const monthBills = selectBillsForMonth(bills, monthDate)
+  const accessibleSections = currentUser
+    ? getUserSections(currentUser.id)
+    : SECTIONS.map((section) => section.key)
+  const monthBills = selectBillsForMonth(bills, monthDate).filter((bill) => accessibleSections.includes(bill.section))
   const collection = selectCollectionStats(monthBills)
   const fulfilment = selectFulfilmentStats(monthBills)
   const sectionBreakdown = selectSectionBreakdown(monthBills)
   const statusBreakdown = selectStatusBreakdown(monthBills)
+  const sectionChartData: SectionChartRow[] = SECTIONS.filter((section) => accessibleSections.includes(section.key)).map((section) => {
+    const row = sectionBreakdown.find((item) => item.section === section.key)
+    return {
+      section: section.key,
+      sectionLabel: section.label,
+      billCount: row?.billCount ?? 0,
+      revenue: row?.revenue ?? 0,
+      percentOfTotal: row?.percentOfTotal ?? 0,
+      collectionRate: row?.collectionRate ?? 0,
+    }
+  })
 
   function exportMonthlyCsv() {
     exportCsv(
       `monthly-report-${selectedMonth}.csv`,
       ['Section', 'Bills', 'Revenue', 'Collection Rate'],
       [
-        ...sectionBreakdown.map((row) => [
+        ...sectionChartData.map((row) => [
           row.sectionLabel,
           row.billCount,
           row.revenue,
@@ -109,51 +201,84 @@ export function MonthlyReportPage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="space-y-3">
-          <h2 className="text-base font-medium">Section Breakdown</h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Section</TableHead>
-                <TableHead className="text-right">Bills</TableHead>
-                <TableHead className="text-right">Revenue</TableHead>
-                <TableHead className="text-right">% of total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sectionBreakdown.map((row) => (
-                <TableRow key={row.section}>
-                  <TableCell>{row.sectionLabel}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{row.billCount}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{INR.format(row.revenue)}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{Math.round(row.percentOfTotal)}%</TableCell>
+        <Card className="rounded-xl border border-border bg-card">
+          <CardContent className="space-y-5 p-5">
+            <h2 className="text-base font-medium">Section Breakdown</h2>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={sectionChartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="sectionLabel" axisLine={false} tickLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <YAxis tickFormatter={axisMoney} axisLine={false} tickLine={false} stroke="hsl(var(--muted-foreground))" fontSize={12} width={48} />
+                  <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} content={<SectionTooltip />} />
+                  <Bar dataKey="revenue" radius={[6, 6, 0, 0]} isAnimationActive animationDuration={600}>
+                    {sectionChartData.map((row) => (
+                      <Cell key={row.section} fill={SECTION_COLORS[row.sectionLabel]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Section</TableHead>
+                  <TableHead className="text-right">Bills</TableHead>
+                  <TableHead className="text-right">Revenue</TableHead>
+                  <TableHead className="text-right">% of total</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </section>
+              </TableHeader>
+              <TableBody>
+                {sectionChartData.map((row) => (
+                  <TableRow key={row.section}>
+                    <TableCell>{row.sectionLabel}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{row.billCount}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{INR.format(row.revenue)}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">{Math.round(row.percentOfTotal)}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
 
-        <section className="space-y-3">
-          <h2 className="text-base font-medium">Status Breakdown</h2>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Bills</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
+        <Card className="rounded-xl border border-border bg-card">
+          <CardContent className="space-y-5 p-5">
+            <h2 className="text-base font-medium">Status Breakdown</h2>
+            <div className="h-[200px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip content={<StatusTooltip />} />
+                  <Pie
+                    data={statusBreakdown}
+                    dataKey="amount"
+                    nameKey="status"
+                    innerRadius={60}
+                    outerRadius={90}
+                    paddingAngle={2}
+                    isAnimationActive
+                    animationDuration={600}
+                  >
+                    {statusBreakdown.map((row) => (
+                      <Cell key={row.status} fill={STATUS_COLORS[row.status]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-2">
               {statusBreakdown.map((row) => (
-                <TableRow key={row.status}>
-                  <TableCell className="capitalize">{row.status}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{row.billCount}</TableCell>
-                  <TableCell className="text-right font-mono tabular-nums">{INR.format(row.amount)}</TableCell>
-                </TableRow>
+                <div key={row.status} className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: STATUS_COLORS[row.status] }} />
+                    <span className="capitalize">{row.status}</span>
+                    <span className="text-muted-foreground">{row.billCount} bill{row.billCount === 1 ? '' : 's'}</span>
+                  </div>
+                  <span className="font-mono tabular-nums">{INR.format(row.amount)}</span>
+                </div>
               ))}
-            </TableBody>
-          </Table>
-        </section>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

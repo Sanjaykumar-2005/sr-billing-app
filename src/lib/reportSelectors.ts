@@ -2,6 +2,8 @@ import {
   eachDayOfInterval,
   endOfMonth,
   format,
+  getMonth,
+  getYear,
   isSameDay,
   isSameMonth,
   startOfMonth,
@@ -9,7 +11,8 @@ import {
 } from 'date-fns'
 
 import { SECTIONS } from '@/lib/constants'
-import { SECTION_ACCESS, type SalesBill, type Section, type User } from '@/types'
+import { getUserSections } from '@/lib/userSections'
+import type { SalesBill, Section, User } from '@/types'
 
 export interface WeeklyRevenueDay {
   date: Date
@@ -32,6 +35,30 @@ export interface StatusBreakdownRow {
   status: 'paid' | 'partial' | 'pending'
   billCount: number
   amount: number
+}
+
+export interface YearlyMonthRow {
+  month: string
+  monthName: string
+  monthIndex: number
+  billCount: number
+  revenue: number
+  avgBillValue: number
+  growthPct: number | null
+}
+
+export interface YearlySectionRow extends SectionBreakdownRow {
+  barPct: number
+}
+
+export interface YearlyReportData {
+  year: number
+  months: YearlyMonthRow[]
+  totalRevenue: number
+  totalBills: number
+  avgMonthlyRevenue: number
+  bestMonth: YearlyMonthRow
+  sectionBreakdown: YearlySectionRow[]
 }
 
 export function safeMoney(value: unknown): number {
@@ -72,7 +99,7 @@ export function selectBillsForMonth(bills: SalesBill[], monthDate: Date): SalesB
 }
 
 export function scopeBillsForUser(bills: SalesBill[], user: User): SalesBill[] {
-  const allowedSections = SECTION_ACCESS[user.role]
+  const allowedSections = getUserSections(user.id)
   return bills.filter((bill) => {
     const sectionAllowed = allowedSections.includes(bill.section)
     if (user.role === 'admin') return sectionAllowed
@@ -171,4 +198,53 @@ export function selectMonthDays(monthDate: Date): Date[] {
     start: startOfMonth(monthDate),
     end: endOfMonth(monthDate),
   })
+}
+
+function billYearDate(bill: SalesBill) {
+  return new Date(bill.createdAt || bill.date)
+}
+
+export function getYearlyData(bills: SalesBill[], year: number): YearlyReportData {
+  const months = Array.from({ length: 12 }, (_, monthIndex) => {
+    const monthBills = bills.filter((bill) => {
+      const date = billYearDate(bill)
+      return getYear(date) === year && getMonth(date) === monthIndex
+    })
+    const revenue = monthBills.reduce((sum, bill) => sum + getBillFinalAmount(bill), 0)
+
+    return {
+      month: format(new Date(year, monthIndex, 1), 'MMM'),
+      monthName: format(new Date(year, monthIndex, 1), 'MMMM'),
+      monthIndex,
+      billCount: monthBills.length,
+      revenue,
+      avgBillValue: monthBills.length > 0 ? revenue / monthBills.length : 0,
+      growthPct: null,
+    }
+  })
+
+  const monthsWithGrowth = months.map((month, index) => {
+    if (index === 0) return month
+    const previousRevenue = months[index - 1].revenue
+    if (previousRevenue === 0) return { ...month, growthPct: month.revenue > 0 ? 100 : 0 }
+    return { ...month, growthPct: ((month.revenue - previousRevenue) / previousRevenue) * 100 }
+  })
+
+  const yearBills = bills.filter((bill) => getYear(billYearDate(bill)) === year)
+  const totalRevenue = monthsWithGrowth.reduce((sum, month) => sum + month.revenue, 0)
+  const bestMonth = monthsWithGrowth.reduce((best, month) => month.revenue > best.revenue ? month : best, monthsWithGrowth[0])
+  const sectionBreakdown = selectSectionBreakdown(yearBills).map((row) => ({
+    ...row,
+    barPct: totalRevenue > 0 ? (row.revenue / totalRevenue) * 100 : 0,
+  }))
+
+  return {
+    year,
+    months: monthsWithGrowth,
+    totalRevenue,
+    totalBills: yearBills.length,
+    avgMonthlyRevenue: totalRevenue / 12,
+    bestMonth,
+    sectionBreakdown,
+  }
 }

@@ -15,7 +15,7 @@ export function ProductRow({ product }: ProductRowProps) {
     <div
       className={cn(
         'flex items-center py-3 border-b border-border last:border-0',
-        isLowStock && 'border-l-2 border-l-amber-500/50 pl-3 -ml-3'
+        isLowStock && 'border-l-2 border-l-[#EF5350]/50 pl-3 -ml-3'
       )}
     >
       <div className="flex-1 min-w-0">
@@ -26,7 +26,7 @@ export function ProductRow({ product }: ProductRowProps) {
         <p
           className={cn(
             'font-mono tabular-nums text-base font-medium',
-            isLowStock ? 'text-amber-700 dark:text-amber-500' : 'text-foreground'
+            isLowStock ? 'text-[#EF5350]' : 'text-foreground'
           )}
         >
           {product.stock}

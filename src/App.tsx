@@ -3,12 +3,14 @@ import { useParams } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
 import { AppShell } from '@/components/layout/AppShell'
+import { CounterManagementPage } from '@/pages/admin/CounterManagementPage'
 import { BillDetailPage } from '@/pages/billing/BillDetailPage'
 import { BillHistoryPage } from '@/pages/billing/BillHistoryPage'
 import { DashboardPage } from '@/pages/DashboardPage'
 import { InventoryPage } from '@/pages/inventory/InventoryPage'
 import { GodownsPage } from '@/pages/inventory/GodownsPage'
 import { ProductsPage } from '@/pages/inventory/ProductsPage'
+import { TransferLogPage } from '@/pages/inventory/TransferLogPage'
 import { LoginPage } from '@/pages/LoginPage'
 import { NewBillPage } from '@/pages/billing/NewBillPage'
 import { NewPurchasePage } from '@/pages/purchases/NewPurchasePage'
@@ -17,6 +19,7 @@ import { PurchaseListPage } from '@/pages/purchases/PurchaseListPage'
 import { DailyReportPage } from '@/pages/reports/DailyReportPage'
 import { MonthlyReportPage } from '@/pages/reports/MonthlyReportPage'
 import { WeeklyReportPage } from '@/pages/reports/WeeklyReportPage'
+import { YearlyReportPage } from '@/pages/reports/YearlyReportPage'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 // ─── Placeholder for unbuilt pages ────────────────────────────────────────────
 
@@ -48,7 +51,7 @@ export default function App() {
               <Route path="/dashboard"          element={<DashboardPage />} />
               <Route path="/billing"            element={<BillHistoryPage />} />
 
-              <Route element={<ProtectedRoute allowedRoles={['billing_a', 'billing_b', 'admin']} />}>
+              <Route element={<ProtectedRoute allowedRoles={['billing_', 'admin']} />}>
                 <Route path="/billing/new" element={<NewBillPage />} />
               </Route>
               <Route path="/billing/:id"        element={<BillDetailPage />} />
@@ -61,14 +64,19 @@ export default function App() {
               <Route path="/inventory"          element={<InventoryPage />} />
               <Route path="/inventory/products" element={<ProductsPage />} />
               <Route path="/inventory/godowns"  element={<GodownsPage />} />
+              <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+                <Route path="/admin/counters" element={<CounterManagementPage />} />
+                <Route path="/inventory/transfers" element={<TransferLogPage />} />
+              </Route>
 
               <Route path="/reports"       element={<Navigate to="/reports/daily" replace />} />
               <Route path="/reports/daily" element={<DailyReportPage />} />
 
               <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
-                <Route path="/reports/weekly"  element={<WeeklyReportPage />} />
-                <Route path="/reports/monthly" element={<MonthlyReportPage />} />
+                <Route path="/reports/yearly" element={<YearlyReportPage />} />
               </Route>
+              <Route path="/reports/weekly"  element={<WeeklyReportPage />} />
+              <Route path="/reports/monthly" element={<MonthlyReportPage />} />
             </Route>
           </Route>
 

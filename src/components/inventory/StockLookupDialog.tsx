@@ -12,7 +12,7 @@ import {
 import { api } from '@/lib/api'
 import { GODOWNS_SEED, SECTIONS } from '@/lib/constants'
 import { useAuthStore } from '@/store/authStore'
-import { SECTION_ACCESS } from '@/types'
+import { getUserSections } from '@/lib/userSections'
 import type { Product } from '@/types'
 
 interface StockLookupDialogProps {
@@ -25,7 +25,7 @@ export function StockLookupDialog({ open, onOpenChange, onSelect }: StockLookupD
   const currentUser = useAuthStore((s) => s.currentUser)
   const [query, setQuery] = React.useState('')
 
-  const allowedSections = currentUser ? SECTION_ACCESS[currentUser.role] : []
+  const allowedSections = currentUser ? getUserSections(currentUser.id) : []
   const results = api.inventory.search(query, allowedSections)
 
   const grouped = allowedSections

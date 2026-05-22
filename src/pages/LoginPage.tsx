@@ -1,158 +1,99 @@
 import { ArrowRight, Hammer, Power, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
-import { MOCK_USERS } from '@/lib/constants'
+import { COMPANY } from '@/lib/brand'
+import { SECTION_COLORS } from '@/lib/constants'
+import { getAdminUser } from '@/lib/userSections'
+import { cn } from '@/lib/utils'
 import { useAuthStore } from '@/store/authStore'
-import type { User } from '@/types'
+import { type Counter, useCounterStore } from '@/store/counterStore'
 
-interface WorkspaceCard {
-  initials: string
-  role: string
-  description: string
-  badge: string
-  gradient: string
+const AVATAR_CLASSES: Record<string, string> = {
+  deep: 'from-brand-dark to-brand-deepest',
+  mint: 'from-brand-mid to-brand-dark',
+  leaf: 'from-brand-light to-brand-mid',
+  forest: 'from-brand-mid to-brand-deepest',
+  highlight: 'from-brand-light to-brand-dark',
+  charcoal: 'from-brand-dark to-brand-deepest',
 }
 
-const CARD_DETAILS: Record<string, WorkspaceCard> = {
-  'u-1': {
-    initials: 'KS',
-    role: 'Billing A',
-    description: 'Front counter billing & invoicing',
-    badge: 'COUNTER 1',
-    gradient: 'linear-gradient(135deg, #8B5E3C, #C4895A)',
-  },
-  'u-2': {
-    initials: 'MR',
-    role: 'Billing B',
-    description: 'Second counter & customer accounts',
-    badge: 'COUNTER 2',
-    gradient: 'linear-gradient(135deg, #2A7B6E, #3DA899)',
-  },
-  'u-3': {
-    initials: 'SV',
-    role: 'Administrator',
-    description: 'Full access · inventory · reports',
-    badge: 'OWNER',
-    gradient: 'linear-gradient(135deg, #3D2B1F, #6B4226)',
-  },
+const ACCENT_CLASSES = [
+  'border-brand-mid/40 bg-brand-mid/10 text-brand-mid dark:text-brand-light',
+  'border-brand-light/40 bg-brand-light/10 text-brand-dark dark:text-brand-light',
+  'border-brand-dark/40 bg-brand-dark/10 text-brand-dark dark:text-brand-light',
+  'border-brand-mid/40 bg-brand-mid/10 text-brand-mid dark:text-brand-light',
+  'border-brand-light/40 bg-brand-light/10 text-brand-dark dark:text-brand-light',
+]
+
+function roleTone(process: Counter['process']) {
+  return process.some((item) => item === 'Glass' || item === 'Plywood')
+    ? 'text-brand-mid dark:text-brand-light'
+    : 'text-brand-dark dark:text-brand-muted'
 }
 
-const palette = {
-  cream: '#F5F0E8',
-  bronze: '#8B5E3C',
-  bronzeLight: '#C4895A',
-  teal: '#2A7B6E',
-  tealLight: '#3DA899',
-  brownDark: '#3D2B1F',
-  muted: '#8A7A6E',
-  border: 'rgba(139,94,60,0.18)',
-}
-
-function getCard(user: User): WorkspaceCard {
-  return CARD_DETAILS[user.id] ?? {
-    initials: user.name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase(),
-    role: user.role,
-    description: 'Workspace access',
-    badge: 'USER',
-    gradient: 'linear-gradient(135deg, #8B5E3C, #C4895A)',
-  }
-}
-
-function DecorativeLayer() {
+function CounterCard({
+  counter,
+  index,
+  onSelect,
+}: {
+  counter: Counter
+  index: number
+  onSelect: (userId: string) => void
+}) {
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      <svg className="fixed inset-0 h-full w-full opacity-[0.09]" preserveAspectRatio="none">
-        <filter id="plywood-noise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.012 0.08" numOctaves="4" seed="12" />
-          <feColorMatrix type="saturate" values="0" />
-          <feComponentTransfer>
-            <feFuncA type="table" tableValues="0 0.22" />
-          </feComponentTransfer>
-        </filter>
-        <rect width="100%" height="100%" filter="url(#plywood-noise)" />
-      </svg>
+    <button
+      type="button"
+      onClick={() => onSelect(counter.id)}
+      className="group h-full text-left transition duration-200 hover:-translate-y-1"
+      style={{ animationDelay: `${index * 70}ms` }}
+    >
+      <div className="flex h-full flex-col rounded-2xl border border-border bg-card p-6 transition duration-200 group-hover:border-brand-mid/50 group-hover:glow-brand">
+        <div className="flex items-start justify-between gap-4">
+          <div className={cn('flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br font-mono text-sm font-bold text-white ring-2 ring-transparent transition group-hover:ring-brand-mid/50', AVATAR_CLASSES[counter.avatarColor] ?? AVATAR_CLASSES.deep)}>
+            {counter.initials}
+          </div>
+          <span className={cn('rounded-full border px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest glow-brand', ACCENT_CLASSES[index % ACCENT_CLASSES.length])}>
+            {counter.label}
+          </span>
+        </div>
 
-      <svg className="absolute -right-12 top-20 h-80 w-80 opacity-[0.1]" viewBox="0 0 320 320">
-        <rect x="60" y="36" width="190" height="250" rx="8" fill="none" stroke={palette.bronze} strokeWidth="4" />
-        <rect x="82" y="58" width="190" height="250" rx="8" fill="none" stroke={palette.bronzeLight} strokeWidth="3" />
-        {Array.from({ length: 9 }).map((_, index) => (
-          <path
-            key={index}
-            d={`M${78 + index * 18} 52 C ${112 + index * 8} 96, ${80 + index * 20} 148, ${128 + index * 10} 296`}
-            fill="none"
-            stroke={palette.brownDark}
-            strokeWidth="2"
-          />
-        ))}
-      </svg>
+        <div className="mt-6 flex-1">
+          <h2 className="text-xl font-bold text-foreground">{counter.name}</h2>
+          <p className={cn('mt-1 text-sm font-medium', roleTone(counter.process))}>Billing counter workspace</p>
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {counter.process.map((process) => (
+              <span
+                key={process}
+                className="rounded-full border px-2.5 py-1 text-xs font-medium"
+                style={{
+                  backgroundColor: `${SECTION_COLORS[process]}20`,
+                  borderColor: `${SECTION_COLORS[process]}40`,
+                  color: SECTION_COLORS[process],
+                }}
+              >
+                {process}
+              </span>
+            ))}
+          </div>
+        </div>
 
-      <svg className="absolute -left-12 bottom-24 h-56 w-56 opacity-[0.08]" viewBox="0 0 220 220">
-        <rect x="36" y="40" width="132" height="150" rx="10" fill="none" stroke={palette.teal} strokeWidth="4" />
-        <path d="M62 72 L140 48" stroke={palette.tealLight} strokeWidth="3" />
-        <path d="M78 178 L162 88" stroke={palette.tealLight} strokeWidth="3" />
-      </svg>
-
-      <svg className="absolute left-10 top-[44%] h-40 w-48 opacity-[0.09]" viewBox="0 0 190 150">
-        <path d="M62 28 C90 2, 130 18, 126 54 C168 58, 176 112, 132 120 C104 148, 54 134, 58 94 C18 82, 20 42, 62 28Z" fill={palette.bronzeLight} />
-        <circle cx="78" cy="76" r="44" fill={palette.tealLight} />
-        <circle cx="118" cy="74" r="34" fill={palette.bronze} />
-      </svg>
-
-      <svg className="absolute -right-8 bottom-12 h-36 w-80 opacity-[0.09]" viewBox="0 0 320 140">
-        <rect x="20" y="44" width="250" height="46" rx="23" fill="none" stroke={palette.teal} strokeWidth="8" />
-        <path d="M48 67 H244" stroke={palette.tealLight} strokeWidth="2" strokeDasharray="10 10" />
-      </svg>
-
-      <svg className="absolute -left-8 top-16 h-52 w-52 opacity-[0.09]" viewBox="0 0 210 210">
-        <path d="M36 160 C52 76, 104 34, 184 28" fill="none" stroke={palette.bronze} strokeWidth="8" strokeLinecap="round" />
-        {Array.from({ length: 12 }).map((_, index) => (
-          <path
-            key={index}
-            d={`M${54 + index * 11} ${140 - index * 9} l${index % 2 === 0 ? 14 : 8} -4`}
-            stroke={palette.brownDark}
-            strokeWidth="2"
-            strokeLinecap="round"
-          />
-        ))}
-      </svg>
-
-      {[
-        'right-[18%] top-[18%]',
-        'left-[22%] bottom-[16%]',
-        'right-[9%] bottom-[34%]',
-      ].map((position, index) => (
-        <svg key={position} className={`absolute ${position} h-12 w-12 opacity-[0.1]`} viewBox="0 0 48 48">
-          <circle cx="24" cy="24" r="15" fill="none" stroke={index === 1 ? palette.teal : palette.bronze} strokeWidth="3" />
-          {Array.from({ length: 8 }).map((_, tick) => (
-            <circle
-              key={tick}
-              cx={24 + Math.cos((Math.PI * 2 * tick) / 8) * 19}
-              cy={24 + Math.sin((Math.PI * 2 * tick) / 8) * 19}
-              r="2"
-              fill={index === 1 ? palette.teal : palette.bronze}
-            />
-          ))}
-        </svg>
-      ))}
-
-      <svg className="absolute right-0 top-1/2 h-[520px] w-[280px] -translate-y-1/2 opacity-[0.08]" viewBox="0 0 280 520">
-        {Array.from({ length: 8 }).map((_, index) => (
-          <path
-            key={index}
-            d={`M${48 + index * 24} 10 C ${118 + index * 8} 112, ${20 + index * 26} 214, ${112 + index * 12} 510`}
-            fill="none"
-            stroke={index % 2 === 0 ? palette.bronze : palette.brownDark}
-            strokeWidth="2"
-          />
-        ))}
-      </svg>
-    </div>
+        <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+          <span className="text-sm text-muted-foreground">Tap to sign in</span>
+          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted text-brand-mid transition group-hover:border-brand-mid group-hover:bg-brand-mid group-hover:text-white group-hover:glow-brand dark:group-hover:text-brand-deepest">
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        </div>
+      </div>
+    </button>
   )
 }
 
 export function LoginPage() {
   const login = useAuthStore((state) => state.login)
+  const counters = useCounterStore((state) => state.counters)
   const navigate = useNavigate()
+  const admin = getAdminUser()
+  const activeCounters = counters.filter((counter) => counter.active)
 
   function handleSelect(userId: string) {
     login(userId)
@@ -160,203 +101,77 @@ export function LoginPage() {
   }
 
   return (
-    <div
-      className="relative min-h-screen overflow-hidden"
-      style={{
-        backgroundColor: palette.cream,
-        backgroundImage: 'radial-gradient(rgba(139,94,60,0.18) 1px, transparent 1px)',
-        backgroundSize: '22px 22px',
-        color: palette.brownDark,
-        fontFamily: 'Outfit, sans-serif',
-      }}
-    >
-      <style>
-        {`
-          @keyframes fadeSlideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
+    <div className="relative min-h-screen overflow-hidden bg-background px-5 text-foreground">
+      <div className="pointer-events-none absolute left-1/2 top-32 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-brand-mid/10 blur-3xl" />
 
-          @keyframes navDrop {
-            from { opacity: 0; transform: translateY(-12px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
-          .login-nav-entrance {
-            animation: navDrop 0.55s ease-out both;
-          }
-
-          .workspace-card {
-            animation: fadeSlideUp 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-          }
-
-          .workspace-card:hover {
-            transform: translateY(-6px);
-            border-color: #8B5E3C;
-            box-shadow: 0 16px 44px rgba(139, 94, 60, 0.16);
-          }
-
-          .workspace-card:hover .workspace-arrow {
-            transform: scale(1.1);
-            background: #2A7B6E;
-          }
-        `}
-      </style>
-
-      <DecorativeLayer />
-
-      <nav
-        className="login-nav-entrance sticky top-0 z-20 border-b px-5 py-4 backdrop-blur-md"
-        style={{
-          backgroundColor: 'rgba(245,240,232,0.85)',
-          borderColor: 'rgba(139,94,60,0.12)',
-        }}
-      >
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-10 w-10 items-center justify-center rounded-full"
-              style={{ backgroundColor: 'rgba(139,94,60,0.12)', color: palette.bronze }}
-            >
-              <Hammer className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-sm font-semibold sm:text-base" style={{ color: palette.brownDark }}>
-                SR Plywood &amp; Glasses
-              </p>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.28em]" style={{ color: palette.muted }}>
-                MELPURAM
-              </p>
-            </div>
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-4 py-6">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-mid text-white glow-brand dark:text-brand-deepest">
+            <Hammer className="h-5 w-5" />
           </div>
-
-          <div
-            className="flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium"
-            style={{
-              borderColor: 'rgba(42,123,110,0.35)',
-              backgroundColor: 'rgba(255,255,255,0.42)',
-              color: palette.teal,
-            }}
-          >
-            <ShieldCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Secured workspace</span>
-            <span className="sm:hidden">Secured</span>
+          <div>
+            <p className="text-sm font-bold text-foreground sm:text-base">{COMPANY.name}</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">{COMPANY.place}</p>
           </div>
         </div>
-      </nav>
 
-      <main className="relative z-10 mx-auto flex max-w-6xl flex-col items-center px-5 pb-12 pt-16 sm:pt-20">
-        <div className="text-center">
-          <div
-            className="mx-auto inline-flex items-center rounded-full border px-4 py-1.5 text-sm font-medium"
-            style={{
-              borderColor: palette.border,
-              backgroundColor: 'rgba(255,255,255,0.42)',
-              color: palette.bronze,
-            }}
-          >
-            ✦ Welcome back
-          </div>
+        <div className="flex items-center gap-2 rounded-full border border-brand-mid/30 bg-brand-mid/10 px-3 py-2 text-xs font-medium text-brand-mid dark:text-brand-light">
+          <span className="h-2 w-2 rounded-full bg-[#4CAF50] shadow-[0_0_10px_#4CAF50] animate-pulse" />
+          <ShieldCheck className="h-4 w-4" />
+          <span className="hidden sm:inline">Secured workspace</span>
+          <span className="sm:hidden">Secured</span>
+        </div>
+      </header>
 
-          <h1
-            className="mt-6 max-w-3xl text-[36px] leading-[1.04] sm:text-[56px]"
-            style={{ fontFamily: '"DM Serif Display", serif', color: palette.brownDark }}
-          >
-            Choose your{' '}
-            <span className="italic" style={{ color: palette.bronze }}>
-              workspace
-            </span>
-            <br />
-            to start billing.
+      <main className="relative z-10 mx-auto max-w-6xl py-10">
+        <div className="mx-auto max-w-3xl text-center">
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+            Choose your <span className="text-gradient-brand">workspace</span>
           </h1>
-
-          <p
-            className="mx-auto mt-5 max-w-[480px] text-base leading-7"
-            style={{ color: palette.muted }}
-          >
-            Manage inventory, invoices, godowns, and daily sales across plywood, glass,
-            paint, plumbing, and hardware — all in one premium dashboard.
+          <p className="mx-auto mt-4 max-w-2xl text-base leading-7 text-muted-foreground">
+            Sign in to the counter assigned to your process, or enter the owner workspace for full administration.
           </p>
         </div>
 
-        <div className="mt-12 grid w-full max-w-[960px] grid-cols-1 gap-6 md:grid-cols-3">
-          {MOCK_USERS.map((user, index) => {
-            const card = getCard(user)
+        <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {activeCounters.map((counter, index) => (
+            <CounterCard key={counter.id} counter={counter} index={index} onSelect={handleSelect} />
+          ))}
 
-            return (
-              <button
-                key={user.id}
-                type="button"
-                onClick={() => handleSelect(user.id)}
-                className="workspace-card group cursor-pointer rounded-[20px] border p-7 text-left backdrop-blur-xl"
-                style={{
-                  animationDelay: `${index * 100}ms`,
-                  backgroundColor: 'rgba(255,255,255,0.6)',
-                  borderColor: palette.border,
-                  boxShadow: '0 4px 24px rgba(139,94,60,0.08)',
-                }}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div
-                    className="flex h-[52px] w-[52px] items-center justify-center rounded-full text-base font-semibold text-white shadow-sm"
-                    style={{ background: card.gradient }}
-                  >
-                    {card.initials}
-                  </div>
-                  <span
-                    className="rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em]"
-                    style={{
-                      borderColor: palette.border,
-                      backgroundColor: 'rgba(245,240,232,0.82)',
-                      color: palette.bronze,
-                    }}
-                  >
-                    {card.badge}
-                  </span>
+          <button type="button" onClick={() => handleSelect(admin.id)} className="group h-full text-left transition duration-200 hover:-translate-y-1">
+            <div className="flex h-full flex-col rounded-2xl border border-brand-light/40 bg-card p-6 transition duration-200 group-hover:glow-highlight">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-brand-dark to-brand-deepest font-mono text-sm font-bold text-white ring-2 ring-brand-light/30">
+                  SV
                 </div>
+                <span className="rounded-full border border-brand-light/40 bg-brand-light/10 px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-widest text-brand-dark dark:text-brand-light">
+                  Owner
+                </span>
+              </div>
 
-                <div className="mt-7">
-                  <p
-                    className="text-[22px] leading-none"
-                    style={{ fontFamily: '"DM Serif Display", serif', color: palette.brownDark }}
-                  >
-                    {user.name}
-                  </p>
-                  <p
-                    className="mt-2 text-[13px] font-semibold uppercase tracking-[0.2em]"
-                    style={{ color: palette.teal }}
-                  >
-                    {card.role}
-                  </p>
-                  <p className="mt-2 text-sm leading-6" style={{ color: palette.muted }}>
-                    {card.description}
-                  </p>
+              <div className="mt-6 flex-1">
+                <h2 className="text-xl font-bold text-foreground">{admin.name}</h2>
+                <p className="mt-1 text-sm font-medium text-brand-dark dark:text-brand-light">Full administration workspace</p>
+                <div className="mt-4 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-brand-light/30 bg-brand-light/10 px-2.5 py-1 text-xs font-medium text-brand-dark dark:text-brand-light">All sections</span>
                 </div>
+              </div>
 
-                <div className="my-4 border-t border-dashed" style={{ borderColor: 'rgba(139,94,60,0.2)' }} />
-
-                <div className="flex items-center justify-between">
-                  <span className="text-sm" style={{ color: palette.muted }}>
-                    Tap to sign in
-                  </span>
-                  <span
-                    className="workspace-arrow flex h-10 w-10 items-center justify-center rounded-full text-white transition-transform"
-                    style={{ backgroundColor: palette.bronze }}
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </span>
-                </div>
-              </button>
-            )
-          })}
+              <div className="mt-6 flex items-center justify-between border-t border-border pt-4">
+                <span className="text-sm text-muted-foreground">Tap to sign in</span>
+                <span className="flex h-10 w-10 items-center justify-center rounded-full border border-border bg-muted text-brand-dark transition group-hover:border-brand-light group-hover:bg-brand-light group-hover:text-brand-deepest group-hover:glow-highlight">
+                  <ArrowRight className="h-4 w-4" />
+                </span>
+              </div>
+            </div>
+          </button>
         </div>
       </main>
 
-      <footer className="relative z-10 pb-8 text-center text-xs" style={{ color: palette.muted }}>
+      <footer className="relative z-10 px-5 pb-8 text-center text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-2">
           <Power className="h-3.5 w-3.5" />
-          © 2026 SR Plywood &amp; Glasses · Crafted for daily business use
+          2026 {COMPANY.name} - Crafted for daily business use
         </span>
       </footer>
     </div>

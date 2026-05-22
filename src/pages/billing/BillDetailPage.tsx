@@ -1,18 +1,28 @@
-import { Link, useParams, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { Link, useLocation, useParams, Navigate } from 'react-router-dom'
 import { ArrowLeft, FilePlus, Printer } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { PrintableBill } from '@/components/billing/PrintableBill'
+import { ReceiptEdge } from '@/components/billing/ReceiptEdge'
 import { api } from '@/lib/api'
+import { getUserSections } from '@/lib/userSections'
 import { useAuthStore } from '@/store/authStore'
-import { SECTION_ACCESS } from '@/types'
 
 export function BillDetailPage() {
   const { id } = useParams<{ id: string }>()
+  const location = useLocation()
   const currentUser = useAuthStore((s) => s.currentUser)!
-  const allowedSections = SECTION_ACCESS[currentUser.role]
+  const allowedSections = getUserSections(currentUser.id)
   const rawBill = id ? api.bills.get(id) : undefined
   const bill = id ? api.bills.get(id, allowedSections) : undefined
+  const shouldPrint = Boolean((location.state as { print?: boolean } | null)?.print)
+
+  useEffect(() => {
+    if (bill && shouldPrint) {
+      window.setTimeout(() => window.print(), 0)
+    }
+  }, [bill, shouldPrint])
 
   if (rawBill && !bill) {
     return <Navigate to="/dashboard" replace state={{ denied: true, attempted: `/billing/${id}` }} />
@@ -44,8 +54,12 @@ export function BillDetailPage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto border border-border rounded-md bg-card">
-        <PrintableBill bill={bill} />
+      <div className="relative mx-auto max-w-3xl rounded-xl border border-brand-mid bg-white text-gray-900 shadow-lg">
+        <ReceiptEdge direction="top" color="#ffffff" stroke="#5F9598" className="receipt-edge" />
+        <div className="bg-white">
+          <PrintableBill bill={bill} />
+        </div>
+        <ReceiptEdge direction="bottom" color="#ffffff" stroke="#5F9598" className="receipt-edge" />
       </div>
     </div>
   )

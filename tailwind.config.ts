@@ -23,6 +23,21 @@ const config: Config = {
         mono: ['Geist Mono', 'ui-monospace', 'Consolas', 'monospace'],
       },
       colors: {
+        brand: {
+          deepest: '#061E29',
+          dark: '#1D546D',
+          mid: '#5F9598',
+          light: '#F3F4F4',
+          bg: '#061E29',
+          surface: '#0A2535',
+          raised: '#0E2F3E',
+          border: '#1D546D',
+          glow: '#5F9598',
+          accent: '#5F9598',
+          highlight: '#F3F4F4',
+          text: '#F3F4F4',
+          muted: '#8AAFB8',
+        },
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
         ring: 'hsl(var(--ring))',
@@ -61,6 +76,9 @@ const config: Config = {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+      },
+      transitionDuration: {
+        250: '250ms',
       },
       keyframes: {
         'accordion-down': {

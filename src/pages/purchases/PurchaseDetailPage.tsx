@@ -5,9 +5,9 @@ import { toast } from 'sonner'
 import { PrintablePurchase } from '@/components/purchases/PrintablePurchase'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { getUserSections } from '@/lib/userSections'
 import { useAuthStore } from '@/store/authStore'
 import { usePurchaseStore } from '@/store/purchaseStore'
-import { SECTION_ACCESS } from '@/types'
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-IN', {
@@ -23,7 +23,7 @@ export function PurchaseDetailPage() {
   const bill = usePurchaseStore((state) => (id ? state.getPurchase(id) : undefined))
   const applyAndPrint = usePurchaseStore((state) => state.applyAndPrint)
 
-  if (bill && !SECTION_ACCESS[currentUser.role].includes(bill.section)) {
+  if (bill && !getUserSections(currentUser.id).includes(bill.section)) {
     return <Navigate to="/dashboard" replace state={{ denied: true, attempted: `/purchases/${id}` }} />
   }
 
@@ -52,7 +52,7 @@ export function PurchaseDetailPage() {
 
         <div className="flex items-center gap-3">
           {isApplied && bill.printedAt && (
-            <p className="text-sm text-teal-700 dark:text-teal-300">
+            <p className="text-sm text-brand-dark dark:text-brand-light">
               Stock applied on {formatDate(bill.printedAt)}
             </p>
           )}
@@ -75,8 +75,8 @@ export function PurchaseDetailPage() {
           variant="secondary"
           className={
             isApplied
-              ? 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-200'
-              : 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-200'
+              ? 'border-[#4FC3F7]/40 bg-[#4FC3F7]/10 text-[#4FC3F7]'
+              : 'border-[#EF5350]/40 bg-[#EF5350]/10 text-[#EF5350]'
           }
         >
           {isApplied ? 'Applied' : 'Pending'}
@@ -93,7 +93,7 @@ export function PurchaseDetailPage() {
         </div>
       )}
 
-      <div className="mx-auto max-w-3xl rounded-md border border-border bg-card">
+      <div className="mx-auto max-w-3xl rounded-xl border border-brand-mid bg-white text-gray-900 shadow-lg">
         <PrintablePurchase bill={bill} />
       </div>
     </div>

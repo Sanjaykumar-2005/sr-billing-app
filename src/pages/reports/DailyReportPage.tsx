@@ -14,7 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { MOCK_USERS, SECTIONS } from '@/lib/constants'
+import { SECTIONS } from '@/lib/constants'
+import { getUserName } from '@/lib/userSections'
 import { exportCsv } from '@/lib/exportCsv'
 import {
   getBillFinalAmount,
@@ -42,7 +43,7 @@ function displayDate(iso?: string) {
 }
 
 function staffName(userId: string) {
-  return MOCK_USERS.find((user) => user.id === userId)?.name ?? userId
+  return getUserName(userId)
 }
 
 export function DailyReportPage() {

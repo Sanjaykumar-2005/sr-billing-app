@@ -1,8 +1,10 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
 import { GODOWNS_SEED } from '@/lib/constants'
 import { MOCK_PRODUCTS } from '@/lib/mockData'
-import type { Godown, Product, Section } from '@/types'
+import { useAuthStore } from '@/store/authStore'
+import type { Godown, Product, Section, TransferLogEntry } from '@/types'
 
 interface ApplyPurchaseStockInput {
   productId: string
@@ -27,6 +29,7 @@ export interface ProductDefinitionInput {
 
 interface InventoryState {
   products: Product[]
+  transferLog: TransferLogEntry[]
   getBySection: (section: Section) => Product[]
   getByGodown: (godownId: string, section?: Section) => Product[]
   getGodownsForSection: (section: Section) => Godown[]
@@ -38,10 +41,14 @@ interface InventoryState {
   deleteProduct: (productId: string) => void
   decrementStock: (productId: string, qty: number) => void
   applyPurchaseStock: (input: ApplyPurchaseStockInput) => void
+  transferStock: (productId: string, fromGodownId: string, toGodownId: string, qty: number) => void
 }
 
-export const useInventoryStore = create<InventoryState>()((set, get) => ({
+export const useInventoryStore = create<InventoryState>()(
+  persist(
+    (set, get) => ({
   products: MOCK_PRODUCTS,
+  transferLog: [],
 
   getBySection: (section) =>
     get().products.filter((p) => p.section === section),
@@ -164,4 +171,49 @@ export const useInventoryStore = create<InventoryState>()((set, get) => ({
 
       return { products: [...state.products, product] }
     }),
-}))
+
+  transferStock: (productId, fromGodownId, toGodownId, qty) => {
+    const product = get().products.find((item) => item.id === productId)
+    if (!product || product.godownId !== fromGodownId) {
+      throw new Error('Product is not in the selected source godown.')
+    }
+
+    if (qty <= 0 || qty > product.stock) {
+      throw new Error('Transfer quantity exceeds available stock.')
+    }
+
+    const now = new Date().toISOString()
+    const currentUser = useAuthStore.getState().currentUser
+
+    set((state) => ({
+      products: state.products.map((item) =>
+        item.id === productId
+          ? { ...item, godownId: toGodownId, updatedAt: now }
+          : item
+      ),
+      transferLog: [
+        ...state.transferLog,
+        {
+          id: crypto.randomUUID(),
+          productId,
+          productName: product.name,
+          fromGodownId,
+          toGodownId,
+          qty,
+          transferredAt: now,
+          transferredBy: currentUser?.name ?? 'Unknown',
+        },
+      ],
+    }))
+  },
+}),
+    {
+      name: 'billing-app-inventory',
+      version: 2,
+      migrate: (persistedState) => ({
+        ...(persistedState as InventoryState),
+        transferLog: (persistedState as Partial<InventoryState> | undefined)?.transferLog ?? [],
+      }),
+    }
+  )
+)

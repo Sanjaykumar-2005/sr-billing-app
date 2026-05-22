@@ -1,5 +1,5 @@
 import * as React from 'react'
-import { Download, PackagePlus, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react'
+import { AlertTriangle, Download, PackagePlus, Pencil, Plus, RotateCcw, Search, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
@@ -19,11 +19,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ProductFormDialog, type ProductFormValues } from '@/components/inventory/ProductFormDialog'
 import { exportCsv } from '@/lib/exportCsv'
-import { GODOWNS_SEED, SECTIONS } from '@/lib/constants'
+import { GODOWNS_SEED, SECTION_COLORS, SECTIONS } from '@/lib/constants'
+import { getUserSections } from '@/lib/userSections'
 import { api } from '@/lib/api'
 import { useAuthStore } from '@/store/authStore'
 import { useInventoryStore } from '@/store/inventoryStore'
-import { SECTION_ACCESS, type Product, type Section } from '@/types'
+import type { Product, Section } from '@/types'
 import { cn } from '@/lib/utils'
 
 const INR = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' })
@@ -37,22 +38,36 @@ function godownName(godownId: string) {
   return GODOWNS_SEED.find((godown) => godown.id === godownId)?.name ?? godownId
 }
 
+function sectionBadgeStyle(section: Section) {
+  const label = sectionLabel(section)
+  const color = SECTION_COLORS[label] ?? '#5F9598'
+  return {
+    backgroundColor: `${color}20`,
+    borderColor: `${color}40`,
+    color,
+  }
+}
+
 function stockTone(product: Product) {
   if (product.stock <= 0 || product.stock < product.lowStockThreshold * 0.5) return 'red'
-  if (product.stock < product.lowStockThreshold) return 'amber'
+  if (product.stock <= product.lowStockThreshold) return 'warn'
   return 'green'
 }
 
 function stockBarClass(product: Product) {
   const tone = stockTone(product)
-  if (tone === 'green') return 'bg-emerald-500'
-  if (tone === 'amber') return 'bg-amber-500'
-  return 'bg-red-500'
+  if (tone === 'green') return 'bg-[#4CAF50]'
+  if (tone === 'warn') return 'bg-[#FFB74D]'
+  return 'bg-[#EF5350]'
 }
 
 function stockRatio(product: Product) {
   if (product.lowStockThreshold <= 0) return 100
   return Math.min((product.stock / product.lowStockThreshold) * 100, 100)
+}
+
+function isLowStock(product: Product) {
+  return product.stock <= product.lowStockThreshold
 }
 
 function productRows(products: Product[]) {
@@ -75,7 +90,7 @@ export function ProductsPage() {
   const addProductDefinition = useInventoryStore((state) => state.addProductDefinition)
   const updateProductDefinition = useInventoryStore((state) => state.updateProductDefinition)
   const deleteProduct = useInventoryStore((state) => state.deleteProduct)
-  const allowedSections = SECTION_ACCESS[currentUser.role]
+  const allowedSections = getUserSections(currentUser.id)
   const accessibleTypes = SECTIONS.filter((section) => allowedSections.includes(section.key))
 
   const [query, setQuery] = React.useState('')
@@ -158,7 +173,7 @@ export function ProductsPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <h1 className="text-2xl font-medium">Products</h1>
+          <h1 className="page-heading">Products</h1>
           <p className="mt-1 text-sm text-muted-foreground">Total: {filteredProducts.length} items</p>
         </div>
 
@@ -199,17 +214,21 @@ export function ProductsPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {filteredProducts.map((product) => {
           const ratio = stockRatio(product)
+          const lowStock = isLowStock(product)
           return (
-            <Card key={product.id} className="overflow-hidden">
+            <Card key={product.id} className="overflow-hidden border-border bg-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-mid">
               <CardHeader className="space-y-3 pb-3">
                 <div className="flex items-start justify-between gap-3">
-                  <Badge variant="outline">{sectionLabel(product.section)}</Badge>
+                  <Badge variant="outline" style={sectionBadgeStyle(product.section)}>{sectionLabel(product.section)}</Badge>
                   <span className="max-w-[55%] truncate text-right text-xs text-muted-foreground">
                     {product.spec || godownName(product.godownId)}
                   </span>
                 </div>
                 <div>
-                  <h2 className="truncate text-base font-medium">{product.name}</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className="truncate text-base font-medium">{product.name}</h2>
+                    {lowStock && <AlertTriangle className="h-4 w-4 shrink-0 text-[#EF5350]" />}
+                  </div>
                   <p className="font-mono text-xs text-muted-foreground">{product.sku}</p>
                 </div>
               </CardHeader>
@@ -218,7 +237,7 @@ export function ProductsPage() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-md border border-border p-3">
                     <p className="text-xs text-muted-foreground">Stock</p>
-                    <p className="mt-1 font-mono text-lg font-medium tabular-nums">
+                    <p className={cn('mt-1 font-mono text-lg font-medium tabular-nums', lowStock && 'text-[#EF5350]')}>
                       {product.stock} <span className="text-xs text-muted-foreground">{product.unit}</span>
                     </p>
                   </div>

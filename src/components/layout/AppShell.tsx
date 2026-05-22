@@ -20,7 +20,7 @@ export function AppShell() {
   const title = useTitleFromRoute()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
       {/* Fixed desktop sidebar */}
       <Sidebar />
 
@@ -29,7 +29,7 @@ export function AppShell() {
         <Topbar title={title} />
 
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-7xl px-6 py-6"><Outlet /></div>
+          <div className="page-shell mx-auto max-w-7xl px-6 py-6"><Outlet /></div>
         </main>
       </div>
     </div>

@@ -10,9 +10,9 @@ import { StockLookupDialog } from '@/components/inventory/StockLookupDialog'
 import { api } from '@/lib/api'
 import { GODOWNS_SEED, SECTIONS } from '@/lib/constants'
 import { exportCsv } from '@/lib/exportCsv'
+import { getUserSections } from '@/lib/userSections'
 import { useAuthStore } from '@/store/authStore'
 import { useInventoryStore } from '@/store/inventoryStore'
-import { SECTION_ACCESS } from '@/types'
 import type { Godown, Product, Section } from '@/types'
 
 function godownById(id: string): Godown {
@@ -39,9 +39,10 @@ function productRows(products: Product[]) {
 export function InventoryPage() {
   const currentUser = useAuthStore((s) => s.currentUser)
   const products = useInventoryStore((s) => s.products)
+  const allowedSections = currentUser ? getUserSections(currentUser.id) : []
 
   const accessibleSections = SECTIONS.filter(
-    (s) => currentUser && SECTION_ACCESS[currentUser.role].includes(s.key)
+    (s) => allowedSections.includes(s.key)
   )
 
   const [activeSection, setActiveSection] = React.useState<Section>(
@@ -53,7 +54,7 @@ export function InventoryPage() {
   } | null>(null)
   const [lookupOpen, setLookupOpen] = React.useState(false)
   const exportableProducts = products.filter(
-    (product) => currentUser && SECTION_ACCESS[currentUser.role].includes(product.section)
+    (product) => allowedSections.includes(product.section)
   )
 
   React.useEffect(() => {

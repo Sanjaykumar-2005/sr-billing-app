@@ -1,9 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-import { MOCK_USERS } from '@/lib/constants'
+import { getActiveUsers, getUserSections, getUserSectionsForRole } from '@/lib/userSections'
 import type { Role, Section, User } from '@/types'
-import { SECTION_ACCESS } from '@/types'
 
 interface AuthState {
   currentUser: User | null
@@ -20,7 +19,7 @@ export const useAuthStore = create<AuthState>()(
       currentUser: null,
 
       login: (userId) => {
-        const user = MOCK_USERS.find((u) => u.id === userId) ?? null
+        const user = getActiveUsers().find((u) => u.id === userId) ?? null
         set({ currentUser: user })
       },
 
@@ -29,18 +28,20 @@ export const useAuthStore = create<AuthState>()(
       hasAccessTo: (section) => {
         const { currentUser } = get()
         if (!currentUser) return false
-        return SECTION_ACCESS[currentUser.role].includes(section)
+        return getUserSections(currentUser.id).includes(section)
       },
 
       setMockUser: (role) => {
-        const user = MOCK_USERS.find((u) => u.role === role) ?? null
+        const user = getActiveUsers().find((u) => u.role === role) ?? null
         set({ currentUser: user })
       },
     }),
     {
       name: 'billing-app-auth',
-      // Only persist the user id; re-hydrate the full object from MOCK_USERS
+      // Persist the selected user; dynamic counter data is refreshed on login.
       partialize: (state) => ({ currentUser: state.currentUser }),
     }
   )
 )
+
+export { getUserSections, getUserSectionsForRole }

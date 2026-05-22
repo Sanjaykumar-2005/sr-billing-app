@@ -5,92 +5,115 @@ import { toast } from 'sonner'
 import {
   AlertTriangle,
   ArrowRight,
-  CheckCircle2,
   Package,
-  PackagePlus,
   Receipt,
   TrendingUp,
 } from 'lucide-react'
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { WeeklyBarChart } from '@/components/reports/WeeklyBarChart'
-import { SECTIONS } from '@/lib/constants'
+import { SECTION_COLORS, SECTIONS } from '@/lib/constants'
+import { getUserSections } from '@/lib/userSections'
 import {
   getBillFinalAmount,
   getBillStatus,
+  getYearlyData,
   selectCollectionStats,
-  selectCurrentMonthBills,
   selectFulfilmentStats,
   selectWeeklyRevenue,
 } from '@/lib/reportSelectors'
+import { useAuthStore } from '@/store/authStore'
 import { useBillingStore } from '@/store/billingStore'
 import { useInventoryStore } from '@/store/inventoryStore'
-import { useAuthStore } from '@/store/authStore'
 import { cn } from '@/lib/utils'
-import { SECTION_ACCESS, type Product } from '@/types'
-
-// ─── Formatters / helpers ─────────────────────────────────────────────────────
+import type { SalesBill } from '@/types'
 
 const INR = new Intl.NumberFormat('en-IN', {
-  style: 'currency', currency: 'INR', maximumFractionDigits: 0,
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
 })
 const NUM = new Intl.NumberFormat('en-IN')
 
 function greeting() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 17) return 'Good afternoon'
+  const hour = new Date().getHours()
+  if (hour < 12) return 'Good morning'
+  if (hour < 17) return 'Good afternoon'
   return 'Good evening'
 }
 
-// ─── Micro-components ─────────────────────────────────────────────────────────
+function moneyAxis(value: number) {
+  return `₹${Math.round(value / 1000)}k`
+}
 
 function KpiCard({
-  label, value, icon, sub,
+  label,
+  value,
+  icon,
+  sub,
+  accent = 'primary',
 }: {
-  label: string; value: string; icon: React.ReactNode; sub?: string
+  label: string
+  value: string
+  icon: React.ReactNode
+  sub?: string
+  accent?: 'primary' | 'soft' | 'paid' | 'danger'
 }) {
+  const accentClass = {
+    primary: 'border-t-brand-mid text-brand-mid shadow-[0_0_16px_#5F959820] dark:text-brand-light',
+    soft: 'border-t-brand-light text-brand-dark shadow-[0_0_16px_#F3F4F420] dark:text-brand-light',
+    paid: 'border-t-[#4CAF50] text-[#4CAF50] shadow-[0_0_16px_#4CAF5020]',
+    danger: 'border-t-[#EF5350] text-[#EF5350] shadow-[0_0_16px_#EF535020]',
+  }[accent]
+
   return (
-    <Card>
-      <CardContent className="pt-5 pb-4">
-        <div className="flex justify-between items-start gap-2">
-          <div className="min-w-0">
-            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">
-              {label}
-            </p>
-            <p className="text-2xl font-semibold font-mono tabular-nums truncate">{value}</p>
-            {sub && <p className="text-xs text-muted-foreground mt-1 truncate">{sub}</p>}
-          </div>
-          <div className="text-muted-foreground shrink-0 mt-0.5">{icon}</div>
+    <Card className={cn('h-full border-border bg-card transition duration-200 hover:-translate-y-0.5 hover:border-brand-mid', accentClass)}>
+      <CardContent className="flex h-full min-h-28 items-start justify-between gap-3 pt-5 pb-4">
+        <div className="min-w-0">
+          <p className="mb-1.5 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+            {label}
+          </p>
+          <p className="truncate font-mono text-3xl font-semibold tabular-nums text-foreground">{value}</p>
+          {sub && <p className="mt-1 truncate text-xs text-muted-foreground">{sub}</p>}
         </div>
+        <div className="mt-0.5 shrink-0">{icon}</div>
       </CardContent>
     </Card>
   )
 }
 
 function StatBar({
-  label, pct, caption,
+  label,
+  pct,
+  caption,
 }: {
-  label: string; pct: number; caption?: string
+  label: string
+  pct: number
+  caption?: string
 }) {
   const clamped = Math.min(100, Math.max(0, pct))
-  const color =
-    clamped >= 75 ? 'bg-emerald-500'
-    : clamped >= 50 ? 'bg-amber-500'
-    : 'bg-destructive'
+  const color = clamped > 75 ? 'bg-[#4CAF50]' : clamped >= 25 ? 'bg-[#FFB74D]' : 'bg-[#EF5350]'
+
   return (
     <div className="space-y-1.5">
       <div className="flex justify-between text-xs">
         <span className="text-muted-foreground">{label}</span>
-        <span className="font-mono font-medium tabular-nums">{Math.round(clamped)}%</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">{Math.round(clamped)}%</span>
       </div>
-      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+      <div className="h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className={cn('h-full rounded-full transition-all duration-500', color)}
           style={{ width: `${clamped}%` }}
@@ -102,233 +125,171 @@ function StatBar({
 }
 
 function StatusBadge({ status }: { status: 'paid' | 'partial' | 'pending' }) {
-  if (status === 'paid')
-    return (
-      <Badge variant="outline" className="text-emerald-600 border-emerald-200 bg-emerald-50 dark:bg-emerald-950/30 text-[10px]">
-        Paid
-      </Badge>
-    )
-  if (status === 'partial')
-    return (
-      <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950/30 text-[10px]">
-        Partial
-      </Badge>
-    )
+  if (status === 'paid') return <Badge className="border-[#4CAF50]/40 bg-[#4CAF50]/10 text-[10px] text-[#4CAF50] shadow-[0_0_12px_#4CAF5025]">Paid</Badge>
+  if (status === 'partial') return <Badge className="border-[#FFB74D]/40 bg-[#FFB74D]/10 text-[10px] text-[#FFB74D] shadow-[0_0_12px_#FFB74D25]">Partial</Badge>
+  return <Badge className="border-[#EF5350]/40 bg-[#EF5350]/10 text-[10px] text-[#EF5350] shadow-[0_0_12px_#EF535025]">Pending</Badge>
+}
+
+function WeeklyRevenueCard({ bills, today }: { bills: SalesBill[]; today: Date }) {
+  const weekDays = selectWeeklyRevenue(bills, today)
+  const weeklyTotal = weekDays.reduce((sum, day) => sum + day.revenue, 0)
+  const avgPerDay = weeklyTotal / 7
+
   return (
-    <Badge variant="outline" className="text-muted-foreground text-[10px]">Pending</Badge>
+    <Card className="h-full rounded-xl border-border bg-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base text-foreground">Weekly Revenue</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <WeeklyBarChart days={weekDays} />
+        <Separator className="my-4" />
+        <div className="flex gap-8 text-xs">
+          <div>
+            <p className="text-muted-foreground">Weekly total</p>
+            <p className="mt-0.5 font-mono text-base font-semibold tabular-nums text-foreground">{INR.format(weeklyTotal)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Avg / day</p>
+            <p className="mt-0.5 font-mono text-base font-semibold tabular-nums text-foreground">{INR.format(Math.round(avgPerDay))}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
-function LowStockPanel({
-  products, showSection = false, limit = 8,
-}: {
-  products: Product[]; showSection?: boolean; limit?: number
-}) {
-  const sorted = [...products]
-    .sort((a, b) => a.stock / a.lowStockThreshold - b.stock / b.lowStockThreshold)
-    .slice(0, limit)
-
-  if (sorted.length === 0)
-    return (
-      <div className="flex flex-col items-center justify-center rounded-md border border-dashed border-border px-6 py-8 text-center">
-        <div className="flex h-10 w-10 items-center justify-center rounded-md bg-muted text-muted-foreground">
-          <CheckCircle2 className="h-5 w-5" />
-        </div>
-        <p className="mt-3 text-sm font-medium text-foreground">All stock healthy</p>
-        <p className="mt-1 text-sm text-muted-foreground">Nothing needs restocking right now.</p>
-      </div>
-    )
+function YearlyRevenueCard({ bills, year }: { bills: SalesBill[]; year: number }) {
+  const yearly = getYearlyData(bills, year)
 
   return (
-    <div className="space-y-3">
-      {sorted.map((p) => {
-        const sectionLabel = SECTIONS.find((s) => s.key === p.section)?.label ?? p.section
-        const pct = p.lowStockThreshold > 0 ? (p.stock / p.lowStockThreshold) * 100 : 100
-        return (
-          <div key={p.id} className="flex items-center gap-3">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm truncate">{p.name}</span>
-                {showSection && (
-                  <Badge variant="secondary" className="text-[10px] shrink-0">{sectionLabel}</Badge>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1 flex-1 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn('h-full rounded-full', pct <= 50 ? 'bg-destructive' : 'bg-amber-500')}
-                    style={{ width: `${Math.min(100, pct)}%` }}
-                  />
-                </div>
-                <span className="font-mono text-[10px] text-muted-foreground whitespace-nowrap tabular-nums">
-                  {p.stock} / {p.lowStockThreshold} {p.unit}
-                </span>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="shrink-0 h-7 px-2 text-xs" asChild>
-              <Link to="/purchases/new">
-                <PackagePlus className="h-3 w-3 mr-1" />
-                Restock
-              </Link>
-            </Button>
+    <Card className="h-full rounded-xl border-border bg-card">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-base text-foreground">Yearly Revenue</CardTitle>
+        <p className="text-xs text-muted-foreground">Jan - Dec {year}</p>
+      </CardHeader>
+      <CardContent>
+        <div className="h-44">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={yearly.months}>
+              <defs>
+                <linearGradient id="dashboardYearlyRevenueFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#5F9598" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="#5F9598" stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
+              <XAxis dataKey="month" tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" />
+              <YAxis tickFormatter={moneyAxis} tickLine={false} axisLine={false} stroke="hsl(var(--muted-foreground))" width={46} />
+              <Tooltip
+                cursor={{ stroke: 'hsl(var(--border))' }}
+                formatter={(value) => [INR.format(Number(value)), 'Revenue']}
+                labelFormatter={(label) => yearly.months.find((month) => month.month === label)?.monthName ?? label}
+              />
+              <Area
+                type="monotone"
+                dataKey="revenue"
+                stroke="#5F9598"
+                strokeWidth={2}
+                fill="url(#dashboardYearlyRevenueFill)"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+        <Separator className="my-4" />
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-muted-foreground">Year to date</p>
+            <p className="mt-0.5 font-mono text-xl font-semibold tabular-nums text-foreground">{INR.format(yearly.totalRevenue)}</p>
           </div>
-        )
-      })}
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Monthly avg</p>
+            <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums text-foreground">{INR.format(yearly.avgMonthlyRevenue)}</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ChartSection({ bills, today }: { bills: SalesBill[]; today: Date }) {
+  const year = today.getFullYear()
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <WeeklyRevenueCard bills={bills} today={today} />
+      <YearlyRevenueCard bills={bills} year={year} />
     </div>
   )
 }
 
-// ─── Weekly bar chart (admin) ─────────────────────────────────────────────────
-
-// ─── Admin Dashboard ──────────────────────────────────────────────────────────
+function QuickStatsCard({
+  collectionRate,
+  collectionCaption,
+  fulfilmentRate,
+  fulfilmentCaption,
+  stockRate,
+  stockCaption,
+}: {
+  collectionRate: number
+  collectionCaption: string
+  fulfilmentRate: number
+  fulfilmentCaption: string
+  stockRate: number
+  stockCaption: string
+}) {
+  return (
+    <Card className="border-border bg-card">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base text-foreground">Quick Stats</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <StatBar label="Collection Rate" pct={collectionRate} caption={collectionCaption} />
+        <StatBar label="Bill Fulfillment" pct={fulfilmentRate} caption={fulfilmentCaption} />
+        <StatBar label="Stock Health" pct={stockRate} caption={stockCaption} />
+      </CardContent>
+    </Card>
+  )
+}
 
 function AdminDashboard({ name }: { name: string }) {
-  const bills    = useBillingStore((s) => s.bills)
-  const products = useInventoryStore((s) => s.products)
-  const today    = new Date()
+  const bills = useBillingStore((state) => state.bills)
+  const products = useInventoryStore((state) => state.products)
+  const today = new Date()
 
-  // ── KPIs ──
-  const todayBills   = bills.filter((b) => isSameDay(new Date(b.date), today))
-  const todayRevenue = todayBills.reduce((sum, b) => sum + getBillFinalAmount(b), 0)
-  const totalStock   = products.reduce((sum, p) => sum + p.stock, 0)
+  const todayBills = bills.filter((bill) => isSameDay(new Date(bill.date), today))
+  const todayRevenue = todayBills.reduce((sum, bill) => sum + getBillFinalAmount(bill), 0)
+  const totalStock = products.reduce((sum, product) => sum + product.stock, 0)
   const collectionStats = selectCollectionStats(bills)
-  const outstanding  = bills.filter((b) => getBillStatus(b) !== 'paid')
-  const pendingTotal = collectionStats.pending
-
-  // ── Weekly chart ──
-  const weekDays = selectWeeklyRevenue(bills, today)
-  const weeklyTotal = weekDays.reduce((sum, d) => sum + d.revenue, 0)
-  const avgPerDay   = weeklyTotal / 7
-
-  // ── Monthly revenue ──
-  const monthlyRevenue = selectCurrentMonthBills(bills, today)
-    .reduce((sum, b) => sum + getBillFinalAmount(b), 0)
-
-  // ── Quick stats ──
   const fulfilmentStats = selectFulfilmentStats(bills)
-  const healthy    = products.filter((p) => p.stock > p.lowStockThreshold).length
-  const stockRate  = products.length > 0 ? (healthy / products.length) * 100 : 0
-
-  // ── Tables ──
-  const recentBills    = [...bills].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10)
-  const lowStockProds  = products.filter((p) => p.stock <= p.lowStockThreshold)
+  const outstanding = bills.filter((bill) => getBillStatus(bill) !== 'paid')
+  const healthy = products.filter((product) => product.stock > product.lowStockThreshold).length
+  const stockRate = products.length > 0 ? (healthy / products.length) * 100 : 0
+  const recentBills = [...bills].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 10)
 
   return (
     <div className="space-y-6">
-
       <div>
-        <h1 className="text-2xl font-medium">{greeting()}, {name.split(' ')[0]}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {format(today, 'EEEE, d MMMM yyyy')} · Admin overview
+        <h1 className="text-3xl font-bold text-foreground">{greeting()}, {name.split(' ')[0]}</h1>
+        <p className="mt-1 text-sm text-brand-mid dark:text-brand-light">
+          {format(today, 'EEEE, d MMMM yyyy')} - Admin overview
         </p>
       </div>
 
-      {/* ── KPI row ── */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard
-          label="Today's Revenue"
-          value={INR.format(todayRevenue)}
-          icon={<TrendingUp size={18} />}
-          sub={`${todayBills.length} bill${todayBills.length !== 1 ? 's' : ''} today`}
-        />
-        <KpiCard
-          label="Bills Today"
-          value={String(todayBills.length)}
-          icon={<Receipt size={18} />}
-          sub="all sections"
-        />
-        <KpiCard
-          label="Items in Stock"
-          value={NUM.format(totalStock)}
-          icon={<Package size={18} />}
-          sub={`${products.length} products`}
-        />
-        <KpiCard
-          label="Pending Payments"
-          value={INR.format(pendingTotal)}
-          icon={<AlertTriangle size={18} />}
-          sub={`${outstanding.length} bill${outstanding.length !== 1 ? 's' : ''} outstanding`}
-        />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <KpiCard accent="primary" label="Today's Revenue" value={INR.format(todayRevenue)} icon={<TrendingUp size={18} />} sub={`${todayBills.length} bill${todayBills.length !== 1 ? 's' : ''} today`} />
+        <KpiCard accent="soft" label="Bills Today" value={String(todayBills.length)} icon={<Receipt size={18} />} sub="all sections" />
+        <KpiCard accent="paid" label="Items in Stock" value={NUM.format(totalStock)} icon={<Package size={18} />} sub={`${products.length} products`} />
+        <KpiCard accent="danger" label="Pending Payments" value={INR.format(collectionStats.pending)} icon={<AlertTriangle size={18} />} sub={`${outstanding.length} bill${outstanding.length !== 1 ? 's' : ''} outstanding`} />
       </div>
 
-      {/* ── Chart + stats row ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <ChartSection bills={bills} today={today} />
 
-        {/* Weekly Revenue — spans 2 cols */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">Weekly Revenue</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <WeeklyBarChart days={weekDays} />
-            <Separator className="my-4" />
-            <div className="flex gap-8 text-xs">
-              <div>
-                <p className="text-muted-foreground">Weekly total</p>
-                <p className="font-mono font-semibold tabular-nums mt-0.5 text-base">
-                  {INR.format(weeklyTotal)}
-                </p>
-              </div>
-              <div>
-                <p className="text-muted-foreground">Avg / day</p>
-                <p className="font-mono font-semibold tabular-nums mt-0.5 text-base">
-                  {INR.format(Math.round(avgPerDay))}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Right column: Quick Stats + Monthly Revenue */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Quick Stats</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <StatBar
-                label="Collection Rate"
-                pct={collectionStats.collectionRate}
-                caption={`${INR.format(collectionStats.paid)} collected of ${INR.format(collectionStats.total)}`}
-              />
-              <StatBar
-                label="Bill Fulfillment"
-                pct={fulfilmentStats.fulfilmentRate}
-                caption={`${fulfilmentStats.fulfilledBills} of ${fulfilmentStats.totalBills} bills fully paid`}
-              />
-              <StatBar
-                label="Stock Health"
-                pct={stockRate}
-                caption={`${healthy} of ${products.length} products above threshold`}
-              />
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Monthly Revenue</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-mono font-semibold tabular-nums">
-                {INR.format(monthlyRevenue)}
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {format(today, 'MMMM yyyy')} · month to date
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-
-      {/* ── Recent Bills + Low Stock ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        <Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="border-border bg-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Recent Bills</CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
+            <CardTitle className="text-base text-foreground">Recent Bills</CardTitle>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
               <Link to="/billing">
-                All bills <ArrowRight className="h-3 w-3 ml-1" />
+                All bills <ArrowRight className="ml-1 h-3 w-3" />
               </Link>
             </Button>
           </CardHeader>
@@ -339,30 +300,37 @@ function AdminDashboard({ name }: { name: string }) {
                   <TableHead className="pl-6">Bill #</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Section</TableHead>
-                  <TableHead className="text-right pr-6">Amount</TableHead>
+                  <TableHead className="pr-6 text-right">Amount</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {recentBills.map((bill) => {
-                  const sLabel   = SECTIONS.find((s) => s.key === bill.section)?.label ?? bill.section
-                  const finalAmt = getBillFinalAmount(bill)
+                  const sectionLabel = SECTIONS.find((section) => section.key === bill.section)?.label ?? bill.section
                   return (
-                    <TableRow key={bill.id}>
+                    <TableRow key={bill.id} className="hover:bg-muted/60">
                       <TableCell className="pl-6">
                         <Link to={`/billing/${bill.id}`} className="font-mono text-xs hover:underline">
                           {bill.billNumber}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-sm max-w-[130px] truncate">
-                        {bill.customerName ?? (
-                          <span className="text-muted-foreground italic">Walk-in</span>
-                        )}
+                      <TableCell className="max-w-[130px] truncate text-sm">
+                        {bill.customerName ?? <span className="text-muted-foreground italic">Walk-in</span>}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-[10px]">{sLabel}</Badge>
+                        <Badge
+                          variant="outline"
+                          className="text-[10px]"
+                          style={{
+                            backgroundColor: `${SECTION_COLORS[sectionLabel]}20`,
+                            borderColor: `${SECTION_COLORS[sectionLabel]}40`,
+                            color: SECTION_COLORS[sectionLabel],
+                          }}
+                        >
+                          {sectionLabel}
+                        </Badge>
                       </TableCell>
-                      <TableCell className="text-right pr-6 font-mono tabular-nums text-xs">
-                        {INR.format(finalAmt)}
+                      <TableCell className="pr-6 text-right font-mono text-xs tabular-nums">
+                        {INR.format(getBillFinalAmount(bill))}
                       </TableCell>
                     </TableRow>
                   )
@@ -372,110 +340,64 @@ function AdminDashboard({ name }: { name: string }) {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              Low Stock
-              {lowStockProds.length > 0 && (
-                <Badge variant="destructive" className="text-[10px]">{lowStockProds.length}</Badge>
-              )}
-            </CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
-              <Link to="/inventory">
-                Inventory <ArrowRight className="h-3 w-3 ml-1" />
-              </Link>
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <LowStockPanel products={lowStockProds} showSection limit={8} />
-          </CardContent>
-        </Card>
-
+        <QuickStatsCard
+          collectionRate={collectionStats.collectionRate}
+          collectionCaption={`${INR.format(collectionStats.paid)} collected of ${INR.format(collectionStats.total)}`}
+          fulfilmentRate={fulfilmentStats.fulfilmentRate}
+          fulfilmentCaption={`${fulfilmentStats.fulfilledBills} of ${fulfilmentStats.totalBills} bills fully paid`}
+          stockRate={stockRate}
+          stockCaption={`${healthy} of ${products.length} products above threshold`}
+        />
       </div>
     </div>
   )
 }
 
-// ─── Billing Dashboard (A & B) ────────────────────────────────────────────────
-
-function BillingDashboard({
-  name, userId, role,
-}: {
-  name: string
-  userId: string
-  role: 'billing_a' | 'billing_b'
-}) {
-  const bills    = useBillingStore((s) => s.bills)
-  const products = useInventoryStore((s) => s.products)
-  const today    = new Date()
-
-  const allowedSections = SECTION_ACCESS[role]
-  const sectionNames    = allowedSections
-    .map((s) => SECTIONS.find((x) => x.key === s)?.label ?? s)
-    .join(' & ')
-
-  // Products scoped to my sections
-  const myProducts     = products.filter((p) => allowedSections.includes(p.section))
-  const myTotalStock   = myProducts.reduce((sum, p) => sum + p.stock, 0)
-  const myLowStock     = myProducts.filter((p) => p.stock <= p.lowStockThreshold)
-
-  // Bills
-  const myTodayBills = bills.filter(
-    (b) => b.createdBy === userId && isSameDay(new Date(b.date), today),
-  )
-  const myAllBills   = bills.filter((b) => b.createdBy === userId)
-  const myFulfilment = selectFulfilmentStats(myAllBills)
+function BillingDashboard({ name, userId }: { name: string; userId: string }) {
+  const bills = useBillingStore((state) => state.bills)
+  const products = useInventoryStore((state) => state.products)
+  const today = new Date()
+  const allowedSections = getUserSections(userId)
+  const sectionNames = allowedSections.map((section) => SECTIONS.find((item) => item.key === section)?.label ?? section).join(' & ')
+  const myProducts = products.filter((product) => allowedSections.includes(product.section))
+  const myBills = bills.filter((bill) => bill.createdBy === userId)
+  const myTodayBills = myBills.filter((bill) => isSameDay(new Date(bill.date), today))
+  const myTotalStock = myProducts.reduce((sum, product) => sum + product.stock, 0)
+  const collectionStats = selectCollectionStats(myBills)
+  const fulfilmentStats = selectFulfilmentStats(myBills)
+  const healthy = myProducts.filter((product) => product.stock > product.lowStockThreshold).length
+  const stockRate = myProducts.length > 0 ? (healthy / myProducts.length) * 100 : 0
 
   return (
     <div className="space-y-6">
-
       <div>
-        <h1 className="text-2xl font-medium">{greeting()}, {name.split(' ')[0]}</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          {format(today, 'EEEE, d MMMM yyyy')} · {sectionNames}
+        <h1 className="text-3xl font-bold text-foreground">{greeting()}, {name.split(' ')[0]}</h1>
+        <p className="mt-1 text-sm text-brand-mid dark:text-brand-light">
+          {format(today, 'EEEE, d MMMM yyyy')} - {sectionNames}
         </p>
       </div>
 
-      {/* ── KPI row ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard
-          label="My Bills Today"
-          value={String(myTodayBills.length)}
-          icon={<Receipt size={18} />}
-          sub={myTodayBills.length === 0 ? 'none yet today' : `created by you`}
-        />
-        <KpiCard
-          label="Items in Stock"
-          value={NUM.format(myTotalStock)}
-          icon={<Package size={18} />}
-          sub={`${myProducts.length} products · ${sectionNames}`}
-        />
-        <KpiCard
-          label="Low-Stock Alerts"
-          value={String(myLowStock.length)}
-          icon={<AlertTriangle size={18} />}
-          sub={myLowStock.length === 0 ? 'all clear' : 'items need restock'}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <KpiCard accent="soft" label="My Bills Today" value={String(myTodayBills.length)} icon={<Receipt size={18} />} sub={myTodayBills.length === 0 ? 'none yet today' : 'created by you'} />
+        <KpiCard accent="paid" label="Items in Stock" value={NUM.format(myTotalStock)} icon={<Package size={18} />} sub={`${myProducts.length} products - ${sectionNames}`} />
+        <KpiCard accent="primary" label="Revenue Today" value={INR.format(myTodayBills.reduce((sum, bill) => sum + getBillFinalAmount(bill), 0))} icon={<TrendingUp size={18} />} sub="created by you" />
       </div>
 
-      {/* ── Today's Bills + Right column ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <ChartSection bills={myBills} today={today} />
 
-        {/* Today's Bills */}
-        <Card>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <Card className="border-border bg-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-            <CardTitle className="text-base">Today's Bills</CardTitle>
-            <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
+            <CardTitle className="text-base text-foreground">Today's Bills</CardTitle>
+            <Button variant="ghost" size="sm" className="h-7 text-xs" asChild>
               <Link to="/billing">
-                All bills <ArrowRight className="h-3 w-3 ml-1" />
+                All bills <ArrowRight className="ml-1 h-3 w-3" />
               </Link>
             </Button>
           </CardHeader>
           <CardContent className={myTodayBills.length === 0 ? undefined : 'px-0 pb-0'}>
             {myTodayBills.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No bills created today.
-              </p>
+              <p className="py-8 text-center text-sm text-muted-foreground">No bills created today.</p>
             ) : (
               <Table>
                 <TableHeader>
@@ -488,20 +410,16 @@ function BillingDashboard({
                 </TableHeader>
                 <TableBody>
                   {myTodayBills.map((bill) => (
-                    <TableRow key={bill.id}>
+                    <TableRow key={bill.id} className="hover:bg-muted/60">
                       <TableCell className="pl-6">
                         <Link to={`/billing/${bill.id}`} className="font-mono text-xs hover:underline">
                           {bill.billNumber}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-sm max-w-[120px] truncate">
-                        {bill.customerName ?? (
-                          <span className="text-muted-foreground italic">Walk-in</span>
-                        )}
+                      <TableCell className="max-w-[120px] truncate text-sm">
+                        {bill.customerName ?? <span className="text-muted-foreground italic">Walk-in</span>}
                       </TableCell>
-                      <TableCell className="text-right font-mono text-xs tabular-nums">
-                        {bill.items.length}
-                      </TableCell>
+                      <TableCell className="text-right font-mono text-xs tabular-nums">{bill.items.length}</TableCell>
                       <TableCell className="pr-6">
                         <StatusBadge status={getBillStatus(bill)} />
                       </TableCell>
@@ -513,72 +431,23 @@ function BillingDashboard({
           </CardContent>
         </Card>
 
-        {/* Right column: Bill Fulfillment + Low Stock */}
-        <div className="space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Bill Fulfillment</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {myAllBills.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No bills created yet.</p>
-              ) : (
-                <>
-                  <StatBar
-                    label="Fulfilled"
-                    pct={myFulfilment.fulfilmentRate}
-                    caption={`${myFulfilment.fulfilledBills} of ${myFulfilment.totalBills} bills fully paid (${Math.round(myFulfilment.fulfilmentRate)}%)`}
-                  />
-                  <div className="flex gap-5 text-xs pt-1">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
-                      <span className="text-muted-foreground">
-                        {myFulfilment.fulfilledBills} fulfilled
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <AlertTriangle size={12} className="text-amber-500 shrink-0" />
-                      <span className="text-muted-foreground">
-                        {myFulfilment.pendingBills} pending / unpaid
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {myLowStock.length > 0 && (
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-                <CardTitle className="text-base flex items-center gap-2">
-                  Low Stock
-                  <Badge variant="destructive" className="text-[10px]">{myLowStock.length}</Badge>
-                </CardTitle>
-                <Button variant="ghost" size="sm" className="text-xs h-7" asChild>
-                  <Link to="/inventory">
-                    View <ArrowRight className="h-3 w-3 ml-1" />
-                  </Link>
-                </Button>
-              </CardHeader>
-              <CardContent>
-                <LowStockPanel products={myLowStock} showSection={false} limit={6} />
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
+        <QuickStatsCard
+          collectionRate={collectionStats.collectionRate}
+          collectionCaption={`${INR.format(collectionStats.paid)} collected of ${INR.format(collectionStats.total)}`}
+          fulfilmentRate={fulfilmentStats.fulfilmentRate}
+          fulfilmentCaption={`${fulfilmentStats.fulfilledBills} of ${fulfilmentStats.totalBills} bills fully paid`}
+          stockRate={stockRate}
+          stockCaption={`${healthy} of ${myProducts.length} products above threshold`}
+        />
       </div>
     </div>
   )
 }
 
-// ─── Entry point ──────────────────────────────────────────────────────────────
-
 export function DashboardPage() {
-  const currentUser = useAuthStore((s) => s.currentUser)!
-  const location    = useLocation()
-  const navigate    = useNavigate()
+  const currentUser = useAuthStore((state) => state.currentUser)!
+  const location = useLocation()
+  const navigate = useNavigate()
 
   React.useEffect(() => {
     if (location.state?.denied) {
@@ -587,14 +456,7 @@ export function DashboardPage() {
     }
   }, [location.pathname, location.state, navigate])
 
-  if (currentUser.role === 'admin') {
-    return <AdminDashboard name={currentUser.name} />
-  }
-  return (
-    <BillingDashboard
-      name={currentUser.name}
-      userId={currentUser.id}
-      role={currentUser.role}
-    />
-  )
+  if (currentUser.role === 'admin') return <AdminDashboard name={currentUser.name} />
+
+  return <BillingDashboard name={currentUser.name} userId={currentUser.id} />
 }

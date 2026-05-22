@@ -74,11 +74,11 @@ export function WeeklyReportPage() {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
+      <Card className="rounded-xl border border-border bg-card">
+        <CardHeader className="p-5 pb-2">
           <CardTitle className="text-base">Weekly Revenue</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-5 pt-0">
           <WeeklyBarChart days={weekDays} />
         </CardContent>
       </Card>

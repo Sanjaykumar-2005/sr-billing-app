@@ -16,6 +16,14 @@ export const SECTIONS: SectionMeta[] = [
   { key: 'electrical', label: 'Electrical', colorVar: '--section-electrical' },
 ]
 
+export const SECTION_COLORS: Record<string, string> = {
+  Glass: '#4FC3F7',
+  Plywood: '#FFB74D',
+  Plumbing: '#81C784',
+  Painting: '#F06292',
+  Electrical: '#FFD54F',
+}
+
 // ─── Seed data ───────────────────────────────────────────────────────────────
 
 export const GODOWNS_SEED: Godown[] = [
@@ -27,20 +35,6 @@ export const GODOWNS_SEED: Godown[] = [
 ]
 
 export const MOCK_USERS: User[] = [
-  {
-    id: 'u-1',
-    name: 'Karthikeyan S.',
-    email: 'karthik@hardwareco.in',
-    role: 'billing_a',
-    createdAt: '2024-01-10T09:00:00.000Z',
-  },
-  {
-    id: 'u-2',
-    name: 'Meenakshi R.',
-    email: 'meena@hardwareco.in',
-    role: 'billing_b',
-    createdAt: '2024-01-10T09:00:00.000Z',
-  },
   {
     id: 'u-3',
     name: 'Subramaniam V.',

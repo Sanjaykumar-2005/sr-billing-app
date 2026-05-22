@@ -1,18 +1,42 @@
 import * as React from 'react'
-import { PackageSearch, Warehouse } from 'lucide-react'
+import { ArrowRightLeft, PackageSearch, Warehouse } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { EmptyState } from '@/components/EmptyState'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { GODOWNS_SEED, SECTIONS } from '@/lib/constants'
+import { GODOWNS_SEED, SECTION_COLORS, SECTIONS } from '@/lib/constants'
+import { getUserSections } from '@/lib/userSections'
 import { useAuthStore } from '@/store/authStore'
 import { useInventoryStore } from '@/store/inventoryStore'
-import { SECTION_ACCESS, type Product, type Section } from '@/types'
+import type { Product, Section } from '@/types'
 import { cn } from '@/lib/utils'
 
 function sectionLabel(section: Section) {
   return SECTIONS.find((item) => item.key === section)?.label ?? section
+}
+
+function sectionBadgeStyle(section: Section) {
+  const label = sectionLabel(section)
+  const color = SECTION_COLORS[label] ?? '#5F9598'
+  return {
+    backgroundColor: `${color}20`,
+    borderColor: `${color}40`,
+    color,
+  }
 }
 
 function isLowStock(product: Product) {
@@ -22,8 +46,12 @@ function isLowStock(product: Product) {
 export function GodownsPage() {
   const currentUser = useAuthStore((state) => state.currentUser)!
   const products = useInventoryStore((state) => state.products)
-  const allowedSections = SECTION_ACCESS[currentUser.role]
+  const transferStock = useInventoryStore((state) => state.transferStock)
+  const allowedSections = getUserSections(currentUser.id)
   const [selectedGodownId, setSelectedGodownId] = React.useState(GODOWNS_SEED[0]?.id ?? '')
+  const [transferProduct, setTransferProduct] = React.useState<Product | null>(null)
+  const [toGodownId, setToGodownId] = React.useState('')
+  const [transferQty, setTransferQty] = React.useState(1)
 
   const selectedGodown = GODOWNS_SEED.find((godown) => godown.id === selectedGodownId) ?? GODOWNS_SEED[0]
   const accessibleProducts = products.filter((product) => allowedSections.includes(product.section))
@@ -31,10 +59,30 @@ export function GodownsPage() {
     .filter((product) => product.godownId === selectedGodownId)
     .sort((a, b) => a.section.localeCompare(b.section) || a.name.localeCompare(b.name))
 
+  function openTransfer(product: Product) {
+    const firstDestination = GODOWNS_SEED.find((godown) => godown.id !== product.godownId)?.id ?? ''
+    setTransferProduct(product)
+    setToGodownId(firstDestination)
+    setTransferQty(Math.min(1, product.stock))
+  }
+
+  function confirmTransfer() {
+    if (!transferProduct) return
+    const destination = GODOWNS_SEED.find((godown) => godown.id === toGodownId)
+
+    try {
+      transferStock(transferProduct.id, transferProduct.godownId, toGodownId, transferQty)
+      toast.success(`Transferred ${transferQty} ${transferProduct.unit} of ${transferProduct.name} to ${destination?.name ?? toGodownId}`)
+      setTransferProduct(null)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to transfer stock.')
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-medium">Godowns</h1>
+        <h1 className="page-heading">Godowns</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Godown-wise stock across your accessible product types.
         </p>
@@ -53,8 +101,8 @@ export function GodownsPage() {
                 type="button"
                 onClick={() => setSelectedGodownId(godown.id)}
                 className={cn(
-                  'w-full rounded-md border border-border bg-card p-4 text-left transition-colors hover:bg-muted/50',
-                  isSelected && 'border-primary'
+                  'w-full rounded-xl border border-border bg-card p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-brand-mid hover:bg-muted',
+                  isSelected && 'border-brand-mid glow-brand'
                 )}
               >
                 <div className="flex items-start justify-between gap-3">
@@ -99,6 +147,7 @@ export function GodownsPage() {
                     <TableHead>SKU</TableHead>
                     <TableHead className="text-right">Stock</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -109,7 +158,7 @@ export function GodownsPage() {
                         {product.spec && <div className="text-xs text-muted-foreground">{product.spec}</div>}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{sectionLabel(product.section)}</Badge>
+                        <Badge variant="outline" style={sectionBadgeStyle(product.section)}>{sectionLabel(product.section)}</Badge>
                       </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">{product.sku}</TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
@@ -122,6 +171,12 @@ export function GodownsPage() {
                           <Badge variant="secondary">OK</Badge>
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" variant="outline" size="sm" onClick={() => openTransfer(product)}>
+                          <ArrowRightLeft className="mr-2 h-4 w-4" />
+                          Transfer
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -130,6 +185,72 @@ export function GodownsPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={!!transferProduct} onOpenChange={(open) => { if (!open) setTransferProduct(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Transfer stock</DialogTitle>
+            <DialogDescription>
+              Move this product to another godown without changing total stock.
+            </DialogDescription>
+          </DialogHeader>
+
+          {transferProduct && (
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Product</Label>
+                  <Input readOnly value={transferProduct.name} />
+                </div>
+                <div className="space-y-2">
+                  <Label>From</Label>
+                  <Input readOnly value={GODOWNS_SEED.find((godown) => godown.id === transferProduct.godownId)?.name ?? transferProduct.godownId} />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>To Godown</Label>
+                <Select value={toGodownId} onValueChange={setToGodownId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {GODOWNS_SEED.filter((godown) => godown.id !== transferProduct.godownId).map((godown) => (
+                      <SelectItem key={godown.id} value={godown.id}>
+                        {godown.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="transferQty">Qty</Label>
+                <Input
+                  id="transferQty"
+                  type="number"
+                  min={1}
+                  max={transferProduct.stock}
+                  value={transferQty}
+                  onChange={(event) => setTransferQty(Number(event.target.value))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Available: {transferProduct.stock} {transferProduct.unit}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTransferProduct(null)}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={confirmTransfer}>
+              Confirm transfer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

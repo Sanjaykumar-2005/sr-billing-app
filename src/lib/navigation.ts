@@ -97,6 +97,20 @@ export const NAV_ITEMS: NavItem[] = [
 
   // ── Reports (admin-only) ───────────────────────────────────────────────────
   {
+    path: '/inventory/transfers',
+    label: 'Transfer Log',
+    iconName: 'Repeat2',
+    roles: ADMIN_ONLY,
+    showInSidebar: true,
+  },
+  {
+    path: '/admin/counters',
+    label: 'Counter Management',
+    iconName: 'Users',
+    roles: ADMIN_ONLY,
+    showInSidebar: true,
+  },
+  {
     path: '/reports/daily',
     label: 'Daily Report',
     iconName: 'BarChart3',
@@ -107,13 +121,20 @@ export const NAV_ITEMS: NavItem[] = [
     path: '/reports/weekly',
     label: 'Weekly Report',
     iconName: 'TrendingUp',
-    roles: ADMIN_ONLY,
+    roles: ALL,
     showInSidebar: true,
   },
   {
     path: '/reports/monthly',
     label: 'Monthly Report',
     iconName: 'BarChart3',
+    roles: ALL,
+    showInSidebar: true,
+  },
+  {
+    path: '/reports/yearly',
+    label: 'Yearly Report',
+    iconName: 'BarChart2',
     roles: ADMIN_ONLY,
     showInSidebar: true,
   },
@@ -122,6 +143,9 @@ export const NAV_ITEMS: NavItem[] = [
 /** Returns flat sidebar items the given role can see (dynamic :id routes excluded) */
 export function getNavFor(role: Role): NavItem[] {
   return NAV_ITEMS.filter(
-    (item) => item.showInSidebar && item.roles.includes(role)
+    (item) =>
+      item.showInSidebar &&
+      (item.roles.includes(role) ||
+        (role.startsWith('billing_') && item.roles.some((itemRole) => itemRole.startsWith('billing_'))))
   )
 }

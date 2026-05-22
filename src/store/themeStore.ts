@@ -11,7 +11,7 @@ interface ThemeState {
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'light',
+      theme: 'dark',
       toggleTheme: () => {
         const next: Theme = get().theme === 'light' ? 'dark' : 'light'
         document.documentElement.classList.toggle('dark', next === 'dark')
@@ -19,9 +19,8 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'billing-app-theme',
+      name: 'sr-theme',
       onRehydrateStorage: () => (state) => {
-        // Apply the persisted theme class to <html> on initial load
         if (state) {
           document.documentElement.classList.toggle(
             'dark',

@@ -26,8 +26,8 @@ export function GodownCard({ godown, section, onClick }: GodownCardProps) {
       <p className="text-xs text-muted-foreground mt-0.5">products</p>
       {lowStockCount > 0 && (
         <div className="flex items-center gap-1.5 mt-3">
-          <span className="bg-amber-500/70 w-1.5 h-1.5 rounded-full" />
-          <span className="text-xs text-amber-700 dark:text-amber-500">
+          <span className="bg-[#EF5350]/70 w-1.5 h-1.5 rounded-full" />
+          <span className="text-xs text-[#EF5350]">
             {lowStockCount} low stock
           </span>
         </div>

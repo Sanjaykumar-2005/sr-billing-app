@@ -1,43 +1,89 @@
-import { cn } from '@/lib/utils'
-import { safeMoney, type WeeklyRevenueDay } from '@/lib/reportSelectors'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
-export function WeeklyBarChart({ days }: { days: Pick<WeeklyRevenueDay, 'label' | 'revenue' | 'isToday'>[] }) {
-  const max = Math.max(...days.map((day) => day.revenue), 1)
+import type { WeeklyRevenueDay } from '@/lib/reportSelectors'
+
+const INR = new Intl.NumberFormat('en-IN', {
+  style: 'currency',
+  currency: 'INR',
+  maximumFractionDigits: 0,
+})
+
+const DAY_COLORS = ['#4A90D9', '#E8844A', '#2EAF7D', '#E8C84A', '#7B5EA7', '#E85A7A', '#50C878']
+
+function axisMoney(value: number) {
+  return `₹${Math.round(value / 1000)}k`
+}
+
+function WeeklyTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ value?: number; payload?: Pick<WeeklyRevenueDay, 'label' | 'revenue' | 'isToday'> & { color?: string; date?: Date } }>
+}) {
+  const row = payload?.[0]?.payload
+  if (!active || !payload?.length || !row) return null
+  const dayName = row.date
+    ? new Date(row.date).toLocaleDateString('en-IN', { weekday: 'long' })
+    : row.label
 
   return (
-    <div className="flex h-28 items-end gap-1.5">
-      {days.map((day, index) => {
-        const pct = day.revenue > 0
-          ? Math.max((safeMoney(day.revenue) / safeMoney(max)) * 100, 6)
-          : 0
+    <div className="rounded-xl border border-border bg-popover px-3 py-2 text-popover-foreground shadow-md">
+      <div className="flex items-center gap-2">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+        <p className="text-xs font-medium">{dayName}</p>
+      </div>
+      <p className="mt-1 font-mono text-sm tabular-nums">{INR.format(Number(payload[0].value ?? 0))}</p>
+    </div>
+  )
+}
 
-        return (
-          <div key={`${day.label}-${index}`} className="flex h-full flex-1 flex-col items-center gap-1.5">
-            <div className="flex w-full flex-1 flex-col justify-end">
-              {day.revenue > 0 && (
-                <p className="mb-0.5 text-center font-mono text-[9px] tabular-nums text-muted-foreground">
-                  {day.revenue >= 1000 ? `${Math.round(day.revenue / 1000)}k` : String(Math.round(day.revenue))}
-                </p>
-              )}
-              <div
-                className={cn(
-                  'min-h-[2px] w-full rounded-t-sm transition-all duration-500',
-                  day.isToday ? 'bg-primary' : 'bg-primary/35',
-                )}
-                style={{ height: `${pct}%` }}
-              />
-            </div>
-            <span
-              className={cn(
-                'font-mono text-[10px]',
-                day.isToday ? 'font-semibold text-foreground' : 'text-muted-foreground',
-              )}
-            >
-              {day.label}
-            </span>
-          </div>
-        )
-      })}
+export function WeeklyBarChart({ days }: { days: (Pick<WeeklyRevenueDay, 'label' | 'revenue' | 'isToday'> & { date?: Date })[] }) {
+  const data = days.map((day, index) => ({ ...day, color: DAY_COLORS[index % DAY_COLORS.length] }))
+
+  return (
+    <div className="h-[220px]">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={data} margin={{ top: 10, right: 8, bottom: 0, left: 0 }}>
+          <CartesianGrid stroke="hsl(var(--border))" vertical={false} />
+          <XAxis
+            dataKey="label"
+            axisLine={false}
+            tickLine={false}
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={12}
+          />
+          <YAxis
+            axisLine={false}
+            tickLine={false}
+            tickFormatter={axisMoney}
+            stroke="hsl(var(--muted-foreground))"
+            fontSize={12}
+            width={48}
+          />
+          <Tooltip cursor={{ fill: 'hsl(var(--accent))' }} content={<WeeklyTooltip />} />
+          <Bar
+            dataKey="revenue"
+            radius={[6, 6, 0, 0]}
+            activeBar={{ opacity: 0.75 }}
+            isAnimationActive
+            animationDuration={600}
+          >
+            {data.map((day, index) => (
+              <Cell key={`${day.label}-${index}`} fill={day.color} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
     </div>
   )
 }

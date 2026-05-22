@@ -14,11 +14,10 @@ import { Form } from '@/components/ui/form'
 import { BillLineItem } from '@/components/billing/BillLineItem'
 import { BillScanDialog } from '@/components/billing/BillScanDialog'
 import { api, InsufficientStockError } from '@/lib/api'
-import { SECTIONS } from '@/lib/constants'
 import type { ParsedBill } from '@/lib/billScan'
+import { getUserSections } from '@/lib/userSections'
 import { useAuthStore } from '@/store/authStore'
 import { useInventoryStore } from '@/store/inventoryStore'
-import { SECTION_ACCESS, type Section } from '@/types'
 
 const PHONE_RE = /^[+]?[\d\s-]{7,15}$/
 
@@ -59,6 +58,10 @@ const EMPTY_ITEM = {
   glassSize: '', model: '', sqFt: 0, unitPrice: 0,
 }
 
+function isSqFtUnit(unit?: string) {
+  return unit?.trim().toLowerCase() === 'sq.ft'
+}
+
 export function NewBillPage() {
   const navigate    = useNavigate()
   const currentUser = useAuthStore((s) => s.currentUser)!
@@ -86,7 +89,7 @@ export function NewBillPage() {
     const sqFt  = Number(item.sqFt)      || 0
     const qty   = Number(item.quantity)  || 0
     const rate  = Number(item.unitPrice) || 0
-    return sum + (sqFt > 0 ? sqFt * rate : qty * rate)
+    return sum + (isSqFtUnit(item.unit) ? sqFt * rate : qty * rate)
   }, 0)
 
   const discount      = Number(watchedDiscount) || 0
@@ -94,15 +97,9 @@ export function NewBillPage() {
   const finalAmount   = total - discount
   const balanceAmount = finalAmount - paidAmount
 
-  const firstSelectedId  = watchedItems?.find((item) => item.productId)?.productId
-  const lockedSection: Section | undefined = products.find((p) => p.id === firstSelectedId)?.section
-  const lockedSectionLabel = lockedSection
-    ? SECTIONS.find((s) => s.key === lockedSection)?.label
-    : undefined
-
   function onSubmit(values: FormValues) {
     const firstProduct = products.find((p) => p.id === values.items[0]?.productId)
-    const section = firstProduct?.section ?? SECTION_ACCESS[currentUser.role][0]
+    const section = firstProduct?.section ?? getUserSections(currentUser.id)[0]
 
     try {
       const bill = api.bills.create({
@@ -149,12 +146,13 @@ export function NewBillPage() {
 
   function setScannedItem(index: number, item: ParsedBill['items'][number]) {
     const product = findScannedProduct(item.name)
+    const isSqFtProduct = isSqFtUnit(product?.unit)
 
     form.setValue(`items.${index}.productId`, product?.id ?? '', { shouldValidate: true })
     form.setValue(`items.${index}.productName`, product?.name ?? item.name, { shouldValidate: true })
     form.setValue(`items.${index}.quantity`, item.qty, { shouldValidate: true })
     form.setValue(`items.${index}.unit`, product?.unit ?? 'pcs', { shouldValidate: true })
-    form.setValue(`items.${index}.sqFt`, item.sqFt, { shouldValidate: true })
+    form.setValue(`items.${index}.sqFt`, product ? (isSqFtProduct ? item.sqFt : 0) : item.sqFt, { shouldValidate: true })
     form.setValue(`items.${index}.unitPrice`, product?.salePrice ?? item.rate, { shouldValidate: true })
   }
 
@@ -175,6 +173,7 @@ export function NewBillPage() {
 
     const scannedItems = parsed.items.map((item) => {
       const product = findScannedProduct(item.name)
+      const isSqFtProduct = isSqFtUnit(product?.unit)
 
       return {
         productId: product?.id ?? '',
@@ -183,7 +182,7 @@ export function NewBillPage() {
         unit: product?.unit ?? 'pcs',
         glassSize: '',
         model: '',
-        sqFt: item.sqFt,
+        sqFt: product ? (isSqFtProduct ? item.sqFt : 0) : item.sqFt,
         unitPrice: product?.salePrice ?? item.rate,
       }
     })
@@ -201,7 +200,7 @@ export function NewBillPage() {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-medium">New bill</h1>
+            <h1 className="page-heading">New bill</h1>
             <Button type="button" variant="outline" size="sm" onClick={() => setScanOpen(true)}>
               <ScanLine className="h-4 w-4 mr-2" />
               Scan the Bill
@@ -220,7 +219,6 @@ export function NewBillPage() {
           {/* Bill meta strip */}
           <div className="mb-6 flex justify-between items-center font-mono text-xs uppercase tracking-widest text-muted-foreground">
             <span>INV-{year}-DRAFT</span>
-            {lockedSectionLabel && <span>Section: {lockedSectionLabel}</span>}
             <span>{todayLabel}</span>
           </div>
 
@@ -229,7 +227,7 @@ export function NewBillPage() {
             <div className="space-y-6">
 
               {/* Customer card */}
-              <Card>
+              <Card className="bg-brand-raised">
                 <CardHeader>
                   <CardTitle className="text-base">Customer</CardTitle>
                 </CardHeader>
@@ -280,7 +278,7 @@ export function NewBillPage() {
               </Card>
 
               {/* Items card */}
-              <Card>
+              <Card className="bg-brand-raised">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0">
                   <CardTitle className="text-base">Items</CardTitle>
                   <Button type="button" variant="ghost" size="sm" onClick={() => append(EMPTY_ITEM)}>
@@ -294,7 +292,6 @@ export function NewBillPage() {
                       index={index}
                       isOnly={fields.length === 1}
                       onRemove={() => remove(index)}
-                      lockedSection={lockedSection}
                     />
                   ))}
                   <Button
@@ -312,7 +309,7 @@ export function NewBillPage() {
 
             {/* Right column — sticky totals */}
             <div>
-              <Card className="lg:sticky lg:top-6">
+              <Card className="bg-brand-raised lg:sticky lg:top-6">
                 <CardHeader>
                   <CardTitle className="text-base">Totals</CardTitle>
                 </CardHeader>

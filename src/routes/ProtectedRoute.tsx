@@ -13,7 +13,12 @@ export function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
 
   if (currentUser === null) return <Navigate to="/login" replace />
 
-  if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+  const allowed =
+    !allowedRoles ||
+    allowedRoles.includes(currentUser.role) ||
+    (currentUser.role.startsWith('billing_') && allowedRoles.some((role) => role.startsWith('billing_')))
+
+  if (!allowed) {
     return (
       <Navigate
         to="/dashboard"
