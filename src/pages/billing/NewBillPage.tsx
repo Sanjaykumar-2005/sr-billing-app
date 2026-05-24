@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { Form } from '@/components/ui/form'
 import { BillLineItem } from '@/components/billing/BillLineItem'
 import { BillScanDialog } from '@/components/billing/BillScanDialog'
+import { ScannerConnectDialog } from '@/components/billing/ScannerConnectDialog'
 import { api, InsufficientStockError } from '@/lib/api'
 import type { ParsedBill } from '@/lib/billScan'
 import { getUserSections } from '@/lib/userSections'
@@ -68,6 +69,8 @@ export function NewBillPage() {
   const products    = useInventoryStore((s) => s.products)
   const year        = new Date().getFullYear()
   const [scanOpen, setScanOpen] = useState(false)
+  const [scannerOpen, setScannerOpen] = useState(false)
+  const [scannerImageDataUrl, setScannerImageDataUrl] = useState<string>()
 
   const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(billSchema),
@@ -195,6 +198,15 @@ export function NewBillPage() {
     }
   }
 
+  function handleScanOpenChange(open: boolean) {
+    setScanOpen(open)
+    if (!open) setScannerImageDataUrl(undefined)
+  }
+
+  function openScannerConnection() {
+    setScannerOpen(true)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -205,6 +217,10 @@ export function NewBillPage() {
               <ScanLine className="h-4 w-4 mr-2" />
               Scan the Bill
             </Button>
+            <Button type="button" variant="outline" size="sm" onClick={openScannerConnection}>
+              <ScanLine className="h-4 w-4 mr-2" />
+              Scan from Scanner
+            </Button>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
             Items billed here reduce stock from your section.
@@ -212,7 +228,22 @@ export function NewBillPage() {
         </div>
       </div>
 
-      <BillScanDialog open={scanOpen} onOpenChange={setScanOpen} onExtract={handleBillExtract} />
+      <BillScanDialog
+        open={scanOpen}
+        onOpenChange={handleScanOpenChange}
+        onExtract={handleBillExtract}
+        initialImageDataUrl={scannerImageDataUrl}
+        extractingLabel={scannerImageDataUrl ? 'Reading scanned document…' : undefined}
+      />
+      <ScannerConnectDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        allowPdf
+        onImageScanned={(imageDataUrl) => {
+          setScannerImageDataUrl(imageDataUrl)
+          setScanOpen(true)
+        }}
+      />
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>

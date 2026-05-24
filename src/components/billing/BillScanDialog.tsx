@@ -17,9 +17,17 @@ interface BillScanDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onExtract: (bill: ParsedBill) => void
+  initialImageDataUrl?: string
+  extractingLabel?: string
 }
 
-export function BillScanDialog({ open, onOpenChange, onExtract }: BillScanDialogProps) {
+export function BillScanDialog({
+  open,
+  onOpenChange,
+  onExtract,
+  initialImageDataUrl,
+  extractingLabel = 'Extracting...',
+}: BillScanDialogProps) {
   const videoRef = React.useRef<HTMLVideoElement | null>(null)
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null)
   const fileInputRef = React.useRef<HTMLInputElement | null>(null)
@@ -29,6 +37,13 @@ export function BillScanDialog({ open, onOpenChange, onExtract }: BillScanDialog
   const [imageDataUrl, setImageDataUrl] = React.useState<string>()
   const [cameraMessage, setCameraMessage] = React.useState<string>()
   const [isExtracting, setIsExtracting] = React.useState(false)
+
+  React.useEffect(() => {
+    if (open && initialImageDataUrl) {
+      setMode('upload')
+      setImageDataUrl(initialImageDataUrl)
+    }
+  }, [initialImageDataUrl, open])
 
   const stopCamera = React.useCallback(() => {
     streamRef.current?.getTracks().forEach((track) => track.stop())
@@ -182,7 +197,6 @@ export function BillScanDialog({ open, onOpenChange, onExtract }: BillScanDialog
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
-                capture="environment"
                 className="hidden"
                 onChange={handleUpload}
               />
@@ -209,7 +223,7 @@ export function BillScanDialog({ open, onOpenChange, onExtract }: BillScanDialog
                 Retake
               </Button>
               <Button type="button" onClick={handleExtract} disabled={isExtracting}>
-                {isExtracting ? 'Extracting...' : 'Extract details'}
+                {isExtracting ? extractingLabel : 'Extract details'}
               </Button>
             </div>
           </div>

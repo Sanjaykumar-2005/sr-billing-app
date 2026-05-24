@@ -1,6 +1,7 @@
 import { Download } from 'lucide-react'
 import { format } from 'date-fns'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Bar,
   BarChart,
@@ -104,9 +105,11 @@ function StatusTooltip({
 }
 
 export function MonthlyReportPage() {
+  const navigate = useNavigate()
   const bills = useBillingStore((state) => state.bills)
   const currentUser = useAuthStore((state) => state.currentUser)
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'))
+  const isBillingUser = currentUser?.role.startsWith('billing_') ?? false
   const monthDate = monthFromValue(selectedMonth)
   const accessibleSections = currentUser
     ? getUserSections(currentUser.id)
@@ -127,6 +130,14 @@ export function MonthlyReportPage() {
       collectionRate: row?.collectionRate ?? 0,
     }
   })
+
+  useEffect(() => {
+    if (!isBillingUser) return
+    toast.error('Access denied')
+    navigate('/dashboard', { replace: true })
+  }, [isBillingUser, navigate])
+
+  if (isBillingUser) return null
 
   function exportMonthlyCsv() {
     exportCsv(

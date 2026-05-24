@@ -1,12 +1,14 @@
 import * as React from 'react'
 import { useFieldArray, useForm, useWatch } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Camera, ImageIcon, Plus, X } from 'lucide-react'
+import { Camera, ImageIcon, Plus, Ruler, ScanLine, X } from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { Button } from '@/components/ui/button'
+import { MeasurementsDialog } from '@/components/billing/MeasurementsDialog'
+import { ScannerConnectDialog } from '@/components/billing/ScannerConnectDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -26,6 +28,7 @@ const INR = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' 
 const itemSchema = z.object({
   productId: z.string(),
   productName: z.string().min(1, 'Item name is required'),
+  sizeDimension: z.string().optional(),
   quantity: z.coerce.number().min(1, 'Min 1'),
   unit: z.string().min(1, 'Unit is required'),
   unitPrice: z.coerce.number().min(0, 'Must be 0 or more'),
@@ -47,6 +50,7 @@ type FormValues = z.output<typeof formSchema>
 const EMPTY_ITEM = {
   productId: '',
   productName: '',
+  sizeDimension: '',
   quantity: 1,
   unit: 'pcs',
   unitPrice: 0,
@@ -55,6 +59,27 @@ const EMPTY_ITEM = {
 
 function todayInputValue() {
   return new Date().toISOString().slice(0, 10)
+}
+
+function getSizePlaceholder(section?: Section) {
+  switch (section) {
+    case 'glass':
+    case 'plywood':
+      return 'e.g. 6x4 ft'
+    case 'painting':
+      return 'e.g. 4 ltr / 500 ml'
+    case 'plumbing':
+      return 'e.g. 1/2 inch / 3 m'
+    case 'electrical':
+      return 'e.g. 10 m / 6 mm2'
+    default:
+      return 'e.g. size or dimension'
+  }
+}
+
+function getProductType(section?: Section) {
+  const meta = SECTIONS.find((item) => item.key === section)
+  return meta?.label ?? ''
 }
 
 export function NewPurchasePage() {
@@ -67,6 +92,8 @@ export function NewPurchasePage() {
   const videoRef = React.useRef<HTMLVideoElement | null>(null)
   const streamRef = React.useRef<MediaStream | null>(null)
   const [scanOpen, setScanOpen] = React.useState(false)
+  const [scannerOpen, setScannerOpen] = React.useState(false)
+  const [measurementsIndex, setMeasurementsIndex] = React.useState<number | null>(null)
 
   const form = useForm<FormInput, unknown, FormValues>({
     resolver: zodResolver(formSchema),
@@ -150,6 +177,7 @@ export function NewPurchasePage() {
     form.setValue('items', [{
       productId: product.id,
       productName: product.name,
+      sizeDimension: '',
       quantity: 1,
       unit: product.unit,
       unitPrice: product.costPrice,
@@ -315,10 +343,10 @@ export function NewPurchasePage() {
                   </Button>
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed border-border px-4 py-5 text-sm text-muted-foreground">
                     <ImageIcon className="h-5 w-5" />
-                    <span>Upload purchase photo</span>
+                    <span>Upload photo</span>
                     <input type="file" accept="image/*" className="sr-only" onChange={handleFileChange} />
                   </label>
                   <Button
@@ -328,7 +356,16 @@ export function NewPurchasePage() {
                     onClick={() => setScanOpen(true)}
                   >
                     <Camera className="h-5 w-5" />
-                    Scan image
+                    Scan image (camera)
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-auto justify-start gap-3 px-4 py-5 text-sm font-normal text-muted-foreground"
+                    onClick={() => setScannerOpen(true)}
+                  >
+                    <ScanLine className="h-5 w-5" />
+                    Scan from Scanner
                   </Button>
                 </div>
               )}
@@ -349,7 +386,7 @@ export function NewPurchasePage() {
                 const isNewProduct = !item?.productId
 
                 return (
-                  <div key={field.id} className="grid gap-3 border-b border-border pb-4 last:border-0 sm:grid-cols-[1.4fr_0.7fr_0.8fr_0.8fr_auto]">
+                  <div key={field.id} className="grid gap-3 border-b border-border pb-4 last:border-0 sm:grid-cols-[1.4fr_1fr_0.7fr_0.8fr_0.8fr_auto]">
                     <div className="space-y-2">
                       <Label>Product</Label>
                       <Select value={item?.productId || NEW_PRODUCT_VALUE} onValueChange={(value) => selectProduct(index, value)}>
@@ -371,6 +408,26 @@ export function NewPurchasePage() {
                       {isNewProduct && (
                         <Input placeholder="New product name" {...form.register(`items.${index}.productName`)} />
                       )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Size / Dimension</Label>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          placeholder={getSizePlaceholder(products.find((product) => product.id === item?.productId)?.section)}
+                          {...form.register(`items.${index}.sizeDimension`)}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0"
+                          aria-label="Select measurement"
+                          onClick={() => setMeasurementsIndex(index)}
+                        >
+                          <Ruler className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -463,6 +520,20 @@ export function NewPurchasePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ScannerConnectDialog
+        open={scannerOpen}
+        onOpenChange={setScannerOpen}
+        onImageScanned={(imageDataUrl) => form.setValue('imageUrl', imageDataUrl, { shouldValidate: true })}
+      />
+
+      {measurementsIndex !== null && (
+        <MeasurementsDialog
+          productType={getProductType(products.find((product) => product.id === watchedItems?.[measurementsIndex]?.productId)?.section)}
+          currentValue={watchedItems?.[measurementsIndex]?.sizeDimension ?? ''}
+          onSelect={(value) => form.setValue(`items.${measurementsIndex}.sizeDimension`, value, { shouldValidate: true })}
+          onClose={() => setMeasurementsIndex(null)}
+        />
+      )}
     </div>
   )
 }

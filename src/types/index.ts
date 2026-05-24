@@ -74,6 +74,7 @@ export interface TransferLogEntry {
 export interface PurchaseItem {
   productId: string
   productName: string
+  sizeDimension?: string
   quantity: number
   unit: string
   unitPrice: number // per unit (purchase price)

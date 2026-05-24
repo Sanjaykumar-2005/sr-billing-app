@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useFormContext, useWatch } from 'react-hook-form'
-import { Trash2 } from 'lucide-react'
+import { Ruler, Trash2 } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { MeasurementsDialog } from '@/components/billing/MeasurementsDialog'
 import {
   Command,
   CommandEmpty,
@@ -70,8 +71,14 @@ function formatUnitLabel(unit?: string) {
   }
 }
 
+function getProductType(section?: Section) {
+  const meta = SECTIONS.find((item) => item.key === section)
+  return meta?.label ?? ''
+}
+
 export function BillLineItem({ index, onRemove, isOnly }: BillLineItemProps) {
   const [open, setOpen] = useState(false)
+  const [measurementsOpen, setMeasurementsOpen] = useState(false)
   const { register, setValue, control, formState: { errors } } = useFormContext()
   const currentUser = useAuthStore((s) => s.currentUser)!
   const products = useInventoryStore((s) => s.products)
@@ -82,6 +89,7 @@ export function BillLineItem({ index, onRemove, isOnly }: BillLineItemProps) {
   const quantity  = Number(useWatch({ control, name: `items.${index}.quantity`  })) || 0
   const unitPrice = Number(useWatch({ control, name: `items.${index}.unitPrice` })) || 0
   const sqFt      = Number(useWatch({ control, name: `items.${index}.sqFt`      })) || 0
+  const glassSize = String(useWatch({ control, name: `items.${index}.glassSize` }) ?? '')
 
   const selectedProduct = products.find((p) => p.id === selectedProductId)
   const usesSqFt = isSqFtUnit(selectedProduct?.unit)
@@ -107,7 +115,7 @@ export function BillLineItem({ index, onRemove, isOnly }: BillLineItemProps) {
   return (
     <div className="border-b border-border last:border-0 py-3 space-y-2">
       {/* Row 1: Name | Size / Dimension | Model */}
-      <div className="grid grid-cols-[minmax(280px,1fr)_7rem_6rem] items-start gap-2">
+      <div className="grid grid-cols-[minmax(280px,1fr)_10rem_6rem] items-start gap-2">
         <div className="w-full min-w-[280px]">
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
@@ -166,12 +174,24 @@ export function BillLineItem({ index, onRemove, isOnly }: BillLineItemProps) {
           )}
         </div>
 
-        <Input
-          aria-label="Size / Dimension"
-          placeholder={sizePlaceholder}
-          className="w-28"
-          {...register(`items.${index}.glassSize`)}
-        />
+        <div className="flex w-40 items-center gap-1">
+          <Input
+            aria-label="Size / Dimension"
+            placeholder={sizePlaceholder}
+            className="min-w-0 flex-1"
+            {...register(`items.${index}.glassSize`)}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 shrink-0"
+            aria-label="Select measurement"
+            onClick={() => setMeasurementsOpen(true)}
+          >
+            <Ruler className="h-4 w-4" />
+          </Button>
+        </div>
         <Input
           placeholder="Model"
           className="w-24"
@@ -232,6 +252,15 @@ export function BillLineItem({ index, onRemove, isOnly }: BillLineItemProps) {
 
       {itemErrors?.quantity && (
         <p className="text-xs text-destructive">{String(itemErrors.quantity.message)}</p>
+      )}
+
+      {measurementsOpen && (
+        <MeasurementsDialog
+          productType={getProductType(selectedProduct?.section)}
+          currentValue={glassSize}
+          onSelect={(value) => setValue(`items.${index}.glassSize`, value, { shouldValidate: true })}
+          onClose={() => setMeasurementsOpen(false)}
+        />
       )}
     </div>
   )
